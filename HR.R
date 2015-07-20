@@ -5,240 +5,310 @@
 
 library(Hmisc)
 
-#simulation_dir <- 'exp_alpha'
-#simulation_dir <- 'exp_Y'
-for (simulation_dir in c('exp_alpha', 'exp_Y')) {
-
-dirs <- dir(simulation_dir)
-plot_dir <- paste0('plots_', simulation_dir)
-dir.create(plot_dir, showWarnings=FALSE)
-
-if (simulation_dir == 'exp_Y') {
-    exp <- 'helium content'
-    sun_num <- 9
-    per_off <- 0.3
-} else if (simulation_dir == 'exp_alpha') {
-    exp <- 'mixing lengths'
-    sun_num <- 7
-    per_off <- 0.1
+minor.tick <- function (nx = 2, ny = 2, tick.ratio = 0.5) {
+    ax <- function(w, n, tick.ratio) {
+        range <- par("usr")[if (w == "x") 
+            1:2
+        else 3:4]
+        tick.pos <- if (w == "x") 
+            par("xaxp")
+        else par("yaxp")
+        distance.between.minor <- (tick.pos[2] - tick.pos[1])/tick.pos[3]/n
+        possible.minors <- tick.pos[1] - (0:100) * distance.between.minor
+        low.candidates <- possible.minors >= range[1]
+        low.minor <- if (any(low.candidates)) {
+            min(possible.minors[low.candidates])
+        } else {
+            tick.pos[1]
+        }
+        possible.minors <- tick.pos[2] + (0:100) * distance.between.minor
+        hi.candidates <- possible.minors <= range[2]
+        hi.minor <- if (any(hi.candidates)) {
+            max(possible.minors[hi.candidates])
+        } else {
+            tick.pos[2]
+        }
+        axis(if (w == "x") 
+            1
+        else 2, seq(low.minor, hi.minor, by = distance.between.minor), 
+            labels = FALSE, tcl = par("tcl") * tick.ratio)
+    }
+    if (nx > 1) 
+        ax("x", nx, tick.ratio = tick.ratio)
+    if (ny > 1) 
+        ax("y", ny, tick.ratio = tick.ratio)
+    invisible()
 }
 
 Teff_sun = log10(5777)
 solar_age = 4.57e9
-
-approx_xout <- seq(0, 1, .04)
 font <- "Palatino"
+approx_xout <- seq(0, 1, .04)
+color_offset <- 6
 
-freep <- as.name(sub('.+_', '', simulation_dir))
-offset <- 6
-cl <- heat.colors(length(dirs)+offset)[1:length(dirs)]
-labels <- sapply(sub('.+_', '', dirs), 
-    function(x) { as.expression(bquote(.(freep) ~ "=" ~ .(x))) })
+plot_dir <- file.path('plots')
+dir.create(plot_dir, showWarnings=FALSE)
 
-### Plot HR diagram
-print("Plotting HR diagram")
-cairo_pdf(file.path(plot_dir, 'HR.pdf'), width=6, height=6, family=font)
-sim_i <- 0
-model_nos <- c()
-for (simulation in dirs) {
-    data_file <- file.path(simulation_dir, simulation, 'LOGS', 'history.data')
-    if (file.exists(data_file)) { 
-        sim_i <- sim_i + 1
-        data <- read.table(data_file, header=TRUE, skip=5)
-        HR <- data$log_L ~ data$log_Teff
-        if (sim_i == 1) {
-            par(bty="l", las=1, mar=c(3, 4.5, 3, 1), mgp=c(3, 0.25, 0))
-            plot(HR, type='l', col=cl[sim_i],
-                 xlab=expression(log~T[eff]),
-                 ylab=expression(log~L/L["⊙"]), 
-                 main=paste("HR diagram of Sun-like stars with varied", exp),
-                 xlim=rev(c(min(data$log_Teff)-0.01, 
-                            max(data$log_Teff)+0.05)),
-                 ylim=c(floor(min(data$log_L)),
-                        ceiling(max(data$log_L))),
-                 xaxs='i', yaxs='i', tck=0.01)
-            minor.tick(nx=5, ny=5, tick.ratio=-0.25)
-        } else {
-            lines(HR, col=cl[sim_i])
-        }
-    }
-}
-points(Teff_sun, 0, col="black")
-points(Teff_sun, 0, col="black", pch=21, cex=0.1)
-legend("topleft", col=cl, lty=1, bty='n', legend=labels)
-dev.off()
+layout_matrix <- matrix(c(1,1,2,3,4,5), ncol=2, byrow=TRUE)
 
-bcl <- c(cl[1:(sun_num-1)], "black", cl[(sun_num+1):length(cl)])
-
-### Find profile files at the solar age
-print("Finding profile files at the solar age")
-modelS <- read.table('modelS.dat', header=TRUE) 
-saved_pro_file <- paste0(".", simulation_dir, "_profile_nos")
-if (file.exists(saved_pro_file)) {
-    load(saved_pro_file)
-} else {
-    profile_nos <- c()
-    for (simulation in dirs) {
-        log_dir <- file.path(simulation_dir, simulation, 'LOGS')
-        log_files <- dir(log_dir)
-        log_files <- log_files[order(as.numeric(gsub('\\D', '', log_files)))]
-        best_log <- NA
-        best_age <- Inf
-        for (log_i in grep('profile\\d+.data$', log_files)) {
-            log_file <- file.path(log_dir, log_files[log_i])
-            age <- read.table(log_file, skip=1, nrows=1, header=TRUE)$star_age
-            age_diff <- abs(age - solar_age)
-            print(c(log_file, best_age, age_diff))
-            if (age_diff < best_age) {
-                best_log <- log_file
-                best_age <- age_diff
-            }
-            if (age_diff > best_age) break
-        }
-        profile_nos <- c(profile_nos, best_log)
-    }
-    save(profile_nos, file=saved_pro_file)
+make_legend <- function(labels, ev_stage) {
+    legend("bottomleft", bty='n', pt.cex=1, cex=0.7, 
+        lty=if(ev_stage=="solar-like") c(rep(1, length(labels)), 2) else 1, 
+        col=if(ev_stage=="solar-like") c(cl, "black") else cl,
+        legend=if(ev_stage=="solar-like") c(labels, "Model S") else labels)
 }
 
-### Plot internal profiles
-print("Plotting internal profiles")
-cairo_pdf(file.path(plot_dir, paste0('diff_', simulation_dir, '.pdf')), 
-          width=6, height=6, family=font)
-par(bty='l', las=1, xpd=TRUE,  mfrow=c(2,2), 
-    mar=c(3, 4.5, 1, 1), mgp=c(3, 0.25, 0))
-
-cairo_pdf(file.path(plot_dir, paste0('profile_', simulation_dir, '.pdf')), 
-          width=6, height=6, family="Palatino")
-par(bty="l", las=1, mfrow=c(2,2), 
-    mar=c(3, 3.2, 1, 1), mgp=c(1.8, 0.25, 0))
-
-for (col_name in c("csound", "logRho", "pressure", "temperature")) {
-    if (col_name=="csound") {
-        modelS_y <- log10(modelS[['csound']])
-        main_label <- "Sound speed"
-        symbol <- bquote(c)
-        ylabel <- expression(log~sound~speed~c~"["*cm/sec*"]")
-    } else if (col_name=="logRho") {
-        modelS_y <- log10(modelS[['rho']])
-        main_label <- "Density"
-        symbol <- bquote(rho)
-        ylabel <- expression(log~density~rho~"["*g/cm^3*"]")
-    } else if (col_name=="pressure") {
-        modelS_y <- log10(modelS[['pressure']])
-        main_label <- "Pressure"
-        symbol <- bquote(p)
-        ylabel <- expression(log~pressure~p~"["*dyn/cm^2*"]")
-    } else if (col_name=="temperature") {
-        modelS_y <- log10(modelS[['temperature']])
-        main_label <- "Temperature"
-        symbol <- bquote(T)
-        ylabel <- expression(log~temperature~T~"["*K*"]")
-    }
-    interps <- matrix(nrow=length(approx_xout), ncol=length(dirs)) # Preallocate
-    ## Find plot limits 
-    y_min <- min(modelS_y)
-    y_max <- max(modelS_y)
-    x_max <- 1
-    for (simulation in dirs) {
-        data_file <- file.path(profile_nos[grep(simulation, profile_nos)])
-        if (file.exists(data_file)) {
-            data <- read.table(data_file, header=TRUE, skip=5)
-            y <- data[[col_name]]
-            if (col_name=='csound' || 
-                col_name=='pressure' ||
-                col_name=='temperature') {
-                y <- log10(y)
-            }
-            if (min(y) < y_min) {
-                y_min <- min(y)
-            }
-            if (max(y) > y_max) {
-                y_max <- max(y)
-            }
-            if (round(max(data$radius)+.05, 1) > x_max) {
-                x_max <- round(max(data$radius)+.05, 1)
-            }
-        }
+for (simulation_dir in c('exp_alpha', 'exp_Y')) {
+    dirs <- dir(simulation_dir)
+    if (simulation_dir == 'exp_Y') {
+        exp <- 'helium'
+        sun_num <- grep('.28', dirs)
+    } else if (simulation_dir == 'exp_alpha') {
+        exp <- 'mixing length'
+        sun_num <- grep('2.10', dirs)
     }
     
-    ## Make profile plots 
+    freep <- as.name(sub('.+_', '', simulation_dir))
+    cl <- heat.colors(length(dirs)+color_offset)[1:length(dirs)]
+    cl <- c(cl[1:(sun_num-1)], "black", cl[(sun_num+1):length(cl)])
+    labels <- sapply(sub('.+_', '', dirs), 
+        function(x) { as.expression(bquote(.(freep) ~ "=" ~ .(x))) })
+    
+    #######################
+    ### Plot HR diagram ###
+    #######################
+    print("Plotting HR diagram")
+    cairo_pdf(file.path(plot_dir, paste0(simulation_dir, '_HR.pdf')), 
+              width=6, height=6, family=font)
     sim_i <- 0
+    model_nos <- c()
     for (simulation in dirs) {
-        data_file <- file.path(profile_nos[grep(simulation, profile_nos)])
-        if (file.exists(data_file)) {
+        data_file <- file.path(simulation_dir, simulation, 
+            'LOGS', 'history.data')
+        if (file.exists(data_file)) { 
             sim_i <- sim_i + 1
             data <- read.table(data_file, header=TRUE, skip=5)
-            y <- data[[col_name]]
-            if (col_name=='csound' || 
-                col_name=='pressure' ||
-                col_name=='temperature') {
-                y <- log10(y)
-            }
-            interps[,sim_i] <- approx(data$radius, y, n=length(approx_xout), 
-                                        xout=approx_xout, rule=2)$y
+            start <- which(data$log_L == min(data$log_L))
+            HR <- data$log_L[-1:-start] ~ data$log_Teff[-1:-start]
             if (sim_i == 1) {
-                plot(data$radius, y, type='l', col=cl[sim_i],
-                     xlim=c(0, x_max),
-                     ylim=c(y_min, y_max+0.01*y_max), 
-                     xaxs='i', yaxs='i', tck=0.01,
-                     #xlab=expression(r/R["⊙"]), 
-                     xlab="",
-                     ylab=ylabel)
-                title(xlab=expression(r/R["⊙"]))
-                minor.tick(nx=5, ny=5, tick.ratio=-0.15)
+                par(bty="l", las=1, mar=c(3, 3.2, 3, 1), mgp=c(1.8, 0.25, 0))
+                plot(HR, type='l', col=cl[sim_i],
+                     xlab=expression(log~T[eff]),
+                     ylab=expression(log~L/L["⊙"]), 
+                     main=paste("HR diagram of Sun-like stars with varied", 
+                                exp),
+                     xlim=rev(c(round(min(data$log_Teff), 2), 
+                                round(max(data$log_Teff)+0.05, 2))),
+                     ylim=c(floor(min(data$log_L)),
+                            ceiling(max(data$log_L))),
+                     xaxs='i', yaxs='i', tck=0.01)
+                minor.tick(nx=5, ny=5, tick.ratio=-0.25)
             } else {
-                lines(data$radius, y, col=cl[sim_i])
+                lines(HR, col=cl[sim_i])
             }
         }
     }
-    ## plot modelS
-    lines(modelS$radius, modelS_y, col='black')
-    if (col_name=="csound") {
-        legend("bottomleft", lty=1, bty='n', pt.cex = 1, cex=0.7,
-               legend=c(labels, "Model S"), col=c(cl, "black"))
-    }
-    #dev.off()
-    dev.set(dev.prev())
+    points(Teff_sun, 0, col="black")
+    points(Teff_sun, 0, col="black", pch=21, cex=0.1)
+    legend("topleft", col=cl, lty=1, bty='n', legend=labels)
+    dev.off()
     
-    ## plot relative differences
-    S_interp <- approx(modelS$radius, modelS_y, n=length(approx_xout), 
-                       xout=approx_xout, rule=2)$y
-    rel_diff <- apply(interps, 2, 
-                      function(x) {(x-S_interp)/S_interp})
-    core_var <- var(rel_diff[1,])
-    offset <- round(nrow(rel_diff) * 0.45, 0)
-    r_max <- min(which(apply(rel_diff[offset:nrow(rel_diff),], 1, 
-                             var)>core_var))+offset
-    x_max <- max(approx_xout[1:r_max])
-    for (sim_i in 1:ncol(rel_diff)) {
-        if (sim_i == 1) {
-            plot(approx_xout[1:r_max], rel_diff[1:r_max, sim_i], 
-                 type='l', col=cl[sim_i],
-                 xaxs='i', yaxs='i', 
-                 tck=0.01,
-                 xlim=c(0, x_max),
-                 ylim=range(rel_diff[1:r_max,]),
-                 ylab=bquote((log~.(symbol)[.(freep)] - log~.(symbol)[S]) 
-                            / log~.(symbol)[S]),
-                 xlab="")
-            title(xlab=expression(r/R["⊙"]), mgp=par()$mgp-c(1.3,0,0))
-            minor.tick(nx=5, ny=5, tick.ratio=-0.15)
-            lines(c(x_max,0), c(0, 0), lty=2)
-        } else {
-            lines(approx_xout[1:r_max], rel_diff[1:r_max, sim_i], 
-                  col=bcl[sim_i])
+    ###########################################
+    ### Find profile files at the solar age ###
+    ###########################################
+    print("Finding profile files at the solar age")
+    modelS <- read.table('modelS.dat', header=TRUE) 
+    saved_pro_file <- paste0(".", simulation_dir, "_profile_nos")
+    if (file.exists(saved_pro_file)) {
+        load(saved_pro_file)
+    } else {
+        profile_nos <- c()
+        for (simulation in dirs) {
+            log_dir <- file.path(simulation_dir, simulation, 'LOGS')
+            log_files <- dir(log_dir)
+            log_nos <- as.numeric(gsub('\\D', '', log_files))
+            log_files <- log_files[order(log_nos)]
+            best_log <- NA
+            best_age <- Inf
+            for (log_i in grep('profile\\d+.data$', log_files)) {
+                log_file <- file.path(log_dir, log_files[log_i])
+                profile <- read.table(log_file, skip=1, nrows=1, header=TRUE)
+                age <- profile$star_age
+                age_diff <- abs(age - solar_age)
+                print(c(log_file, best_age, age_diff))
+                if (age_diff < best_age) {
+                    best_log <- log_file
+                    best_age <- age_diff
+                }
+                if (age_diff > best_age) break
+            }
+            profile_nos <- c(profile_nos, best_log)
         }
+        save(profile_nos, file=saved_pro_file)
     }
-    #if (simulation_dir == 'exp_Y' && col_name=="logRho") {
-    #    legend("topleft", legend=labels, col=bcl, lty=1, bty='n',
-    #           pt.cex = 1, cex=0.7)
-    if (col_name=="csound") {
-        legend("bottomleft", legend=labels, col=bcl, lty=1, bty='n',
-               pt.cex = 1, cex=0.7)
+        
+    ##############################
+    ### Plot internal profiles ###
+    ##############################
+    print("Plotting internal profiles")
+    for (ev_stage in c("solar-like", "PMS")) {
+        subdir <- file.path(plot_dir, ev_stage)
+        dir.create(subdir, showWarnings=FALSE)
+        
+        if (ev_stage == "solar-like") {
+            
+        } else {
+            
+        }
+        
+        ## Start profile difference plot device
+        cairo_pdf(file.path(subdir, paste0(simulation_dir, '_diff', '.pdf')),
+                  width=6, height=6, family=font)
+        par(bty='l', las=1, xpd=TRUE,  #mfrow=c(2,2), 
+            mar=c(3, 4.5, 1, 1), mgp=c(3, 0.25, 0))
+        layout(layout_matrix, heights=c(1,3,3))
+        plot.new()
+        text(0.5, 0.5, 
+             paste("Relative differences in", ev_stage, "stars by", exp),
+             cex=2, font=2)
+        
+        ## Start profile plot device
+        cairo_pdf(file.path(subdir, paste0(simulation_dir, '_profile', '.pdf')),
+                  width=6, height=6, family="Palatino")
+        par(bty="l", las=1, #mfrow=c(2,2), 
+            mar=c(3, 3.2, 1, 1), mgp=c(1.8, 0.25, 0))
+        layout(layout_matrix, heights=c(1,3,3))
+        plot.new()
+        text(0.5, 0.5, 
+             paste("Internal profiles of", ev_stage, "stars by", exp), 
+             cex=2, font=2)
+        
+        ## Iterate through the different internal profiles
+        for (col_name in c("csound", "logRho", "pressure", "temperature")) {
+            if (col_name=="csound") {
+                modelS_y <- log10(modelS[['csound']])
+                main_label <- "Sound speed"
+                symbol <- bquote(c)
+                ylabel <- expression(log~sound~speed~c~"["*cm/sec*"]")
+            } else if (col_name=="logRho") {
+                modelS_y <- log10(modelS[['rho']])
+                main_label <- "Density"
+                symbol <- bquote(rho)
+                ylabel <- expression(log~density~rho~"["*g/cm^3*"]")
+            } else if (col_name=="pressure") {
+                modelS_y <- log10(modelS[['pressure']])
+                main_label <- "Pressure"
+                symbol <- bquote(p)
+                ylabel <- expression(log~pressure~p~"["*dyn/cm^2*"]")
+            } else if (col_name=="temperature") {
+                modelS_y <- log10(modelS[['temperature']])
+                main_label <- "Temperature"
+                symbol <- bquote(T)
+                ylabel <- expression(log~temperature~T~"["*K*"]")
+            }
+            # Preallocate interpolation matrix
+            interps <- matrix(nrow=length(approx_xout), ncol=length(dirs))
+            ## Find plot limits 
+            y_min <- ifelse(ev_stage=="solar-like", min(modelS_y), Inf)
+            y_max <- ifelse(ev_stage=="solar-like", max(modelS_y), -Inf)
+            x_max <- 1
+            for (simulation in dirs) {
+                sim_no <- grep(simulation, profile_nos)
+                data_file <- file.path(profile_nos[sim_no])
+                if (file.exists(data_file)) {
+                    data <- read.table(data_file, header=TRUE, skip=5)
+                    y <- data[[col_name]]
+                    if (col_name=='csound' || 
+                        col_name=='pressure' ||
+                        col_name=='temperature') {
+                        y <- log10(y)
+                    }
+                    if (min(y) < y_min) {
+                        y_min <- min(y)
+                    }
+                    if (max(y) > y_max) {
+                        y_max <- max(y)
+                    }
+                    if (round(max(data$radius)+.05, 1) > x_max) {
+                        x_max <- round(max(data$radius)+.05, 1)
+                    }
+                }
+            }
+            
+            ## Make profile plots 
+            sim_i <- 0
+            for (simulation in dirs) {
+                sim_no <- grep(simulation, profile_nos)
+                data_file <- file.path(profile_nos[sim_no])
+                if (file.exists(data_file)) {
+                    sim_i <- sim_i + 1
+                    data <- read.table(data_file, header=TRUE, skip=5)
+                    y <- data[[col_name]]
+                    if (col_name=='csound' || 
+                        col_name=='pressure' ||
+                        col_name=='temperature') {
+                        y <- log10(y)
+                    }
+                    interps[,sim_i] <- approx(data$radius, y, 
+                        n=length(approx_xout), xout=approx_xout, rule=2)$y
+                    if (sim_i == 1) {
+                        plot(data$radius, y, type='l', col=cl[sim_i],
+                             xlim=c(0, x_max),
+                             ylim=c(y_min, y_max+0.01*y_max), 
+                             xaxs='i', yaxs='i', tck=0.01,
+                             #xlab=expression(r/R["⊙"]), 
+                             xlab="",
+                             ylab=ylabel)
+                        title(xlab=expression(r/R["⊙"]))
+                        minor.tick(nx=5, ny=5, tick.ratio=-0.15)
+                    } else {
+                        lines(data$radius, y, col=cl[sim_i])
+                    }
+                }
+            }
+            if (ev_stage=="solar-like") ## plot Model S
+                lines(modelS$radius, modelS_y, col='black', lty=2)
+            if (col_name=="csound") 
+                make_legend(labels, ev_stage)
+            dev.set(dev.prev())
+            
+            ## plot relative differences
+            
+            ref <- if(ev_stage=="solar-like") {
+                approx(modelS$radius, modelS_y, n=length(approx_xout), 
+                       xout=approx_xout, rule=2)$y
+            } else {
+                interps[,sun_num]
+            }
+            rel_diff <- apply(interps, 2, function(x) {(x-ref)/ref})
+            core_var <- var(rel_diff[1,])
+            row_offset <- round(nrow(rel_diff) * 0.45, 0)
+            row_max <- min(which(apply(rel_diff[row_offset:nrow(rel_diff),], 1, 
+                                     var)>core_var))+row_offset
+            x_max <- max(approx_xout[1:row_max])
+            for (sim_i in 1:ncol(rel_diff)) {
+                if (sim_i == 1) {
+                    plot(approx_xout[1:row_max], rel_diff[1:row_max, sim_i], 
+                         type='l', col=cl[sim_i],
+                         xaxs='i', yaxs='i', 
+                         tck=0.01,
+                         xlim=c(0, x_max),
+                         ylim=range(rel_diff[1:row_max,]),
+                         ylab=bquote(delta * .(symbol) / .(symbol)),
+                         xlab="")
+                    title(xlab=expression(r/R["⊙"]), mgp=par()$mgp-c(1.3,0,0))
+                    minor.tick(nx=5, ny=5, tick.ratio=-0.15)
+                    lines(c(x_max,0), c(0, 0), lty=2)
+                } else {
+                    lines(approx_xout[1:row_max], rel_diff[1:row_max, sim_i], 
+                          col=cl[sim_i])
+                }
+            }
+            if (col_name=="csound") make_legend(labels, ev_stage)
+            dev.set(dev.next())
+        }
+        dev.off()
+        dev.off()
     }
-    dev.set(dev.next())
 }
-dev.off()
-dev.off()
-
-}
+warnings()
