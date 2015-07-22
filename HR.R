@@ -59,7 +59,8 @@ make_legend <- function(labels, ev_stage, position='left') {
 }
 
 start_dev <- function(maintext, fname) {
-    cairo_pdf(file.path(subdir, paste0(simulation_dir, '_', fname, '.pdf')),
+    cairo_pdf(file.path(subdir, 
+        paste0(ev_stage, '-', simulation_dir, '_', fname, '.pdf')),
               width=6, height=6, family=font)
     layout(matrix(c(1,1,1,2,3,4,5,6,4), ncol=3, byrow=TRUE), 
            heights=c(0.1,0.45,0.45), widths=c(.425,.425,.15))
