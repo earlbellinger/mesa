@@ -22,9 +22,13 @@ if [ ! -e $1 ]; then
     exit 1
 fi
 
+## Pull out the name of the FGONG file
+fname=$(basename $1)
+fname=${fname%.*}
+
 ## If the second (OUTPUT) argument doesn't exist, create one from the first
 if [ -z ${2+x} ]; then
-    path=(${1//./ })
+    path=$(dirname $1)/$fname
   else
     path=$2
 fi
@@ -32,7 +36,7 @@ fi
 ## Create a directory for the results and go there
 ## Also convert the FGONG file to AMDL format and put it in the new directory
 mkdir "$path"
-fname=(${path//\/}) # remove slashes 
+#fname=(${path//\/}) # remove slashes 
 fgong-amdl.d $1 "$path/$fname.amdl"
 cd "$path"
 
@@ -108,7 +112,7 @@ out:
   istdpr,nout,nprcen,irsord,iekinr
   9,50,100,20,0,,,,,,,,     @
   iper,ivarf,kvarf,npvarf,nfmode,
-  1,1,2,0,,,,,,,,,     @
+  1,1,2,0,2,,,,,,,,     @
   irotkr,nprtkr,igm1kr,npgmkr,ispcpr,
   0,,0,,0,,,,,,,     @
   icaswn, sigwn1, sigwn2, frqwn1, frqwn2,iorwn1, iorwn2, frlwn1, frlwn2
@@ -158,8 +162,11 @@ if [ ! -e "$fname.dat" ]; then
     echo "Error: Failed to generate frequency information $fname.dat"
     exit 1
 fi
-sed -i.bak 's/  [a-zA-Z].*$//g' "$fname.dat"
+cp "$fname.dat" "$fname.dat.bak"
+cat "$fname.dat.bak" | tr -s ' ' | cut -d ' ' -f 2-4 > "$fname.dat"
+#sed -i.bak 's/  [a-zA-Z].*$//g' "$fname.dat"
 
 ### Hooray!
+cp "$fname.dat" ..
 echo "Conversion complete. Results can be found in $path/$fname.dat"
 exit 0
