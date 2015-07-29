@@ -11,23 +11,26 @@ dir.create(plot_dir, showWarnings=FALSE)
 
 modelS <- read.table('fgong.l5bi.d.dat')
 
-for (exp_dir in list.dirs(fgong_dir, recursive=FALSE)) {
-    for (ev_stage_dir in list.dirs(exp_dir, recursive=FALSE)) {
+for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
+    for (ev_stage_dir in list.dirs(experiment, recursive=FALSE)) {
         ev_stage <- basename(ev_stage_dir)
         plot_subdir <- file.path(plot_dir, ev_stage)
         dir.create(plot_subdir, showWarnings=FALSE)
         
         files <- list.files(ev_stage_dir)
+        print(files)
         data_files <- grep('*dat$', files)
+        print(data_files)
         if (!any(data_files)) next
         
-        dirs <- list.dirs(ev_stage_dir, recursive=FALSE)
-        load_experiment_info(exp_dir, dirs)
+        simulations <- list.dirs(ev_stage_dir, recursive=FALSE)
+        simulations <- simulations[order(as.numeric(basename(simulations)))]
+        load_experiment_info(experiment, simulations)
         
         widths <- c(.44, .44, .12)
         start_dev("Frequency differences in", "freqdiffs", 
-                  basename(exp_dir), ev_stage, width=widths)
-        start_dev("Frequencies of", "freqs", basename(exp_dir), ev_stage,
+                  basename(experiment), ev_stage, width=widths)
+        start_dev("Frequencies of", "freqs", basename(experiment), ev_stage,
                   widths)
         y_min <- Inf
         y_max <- -Inf
@@ -47,7 +50,7 @@ for (exp_dir in list.dirs(fgong_dir, recursive=FALSE)) {
                  else if (l_mode == 2) "quadrupole"
                  else "octupole"
             counter <- 1
-            if (experiment=='mixing length') {
+            if (experiment_name=='mixing length') {
                 fs <- rev(data_files)
                 tcl <- rev(cl)
             } else {
@@ -100,7 +103,7 @@ for (exp_dir in list.dirs(fgong_dir, recursive=FALSE)) {
             #############################
             n_range <- min(ref[,2]):max(ref[,2])
             diffs <- matrix(nrow=max(ref[,2])-min(ref[,2])+1, #x_max-x_min+1,
-                            ncol=length(dirs))
+                            ncol=length(simulations))
             counter <- 1
             for (model_i in fs) {
                 data <- read.table(file.path(ev_stage_dir, files[model_i]))
