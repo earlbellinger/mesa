@@ -1,32 +1,34 @@
-#### Plot HR diagrams for simulations in all subdirectories 
+#### Plot HR diagrams for experiments in all subdirectories 
 #### Author: Earl Bellinger ( bellinger@mps.mpg.de ) 
 #### Stellar Ages & Galactic Evolution Group 
 #### Max-Planck-Institut fur Sonnensystemforschung 
 
 source('utils.R')
 
+exp_dirs <- 'exp'
 plot_dir <- file.path('plots')
 dir.create(plot_dir, showWarnings=FALSE)
 fgong_dir <- file.path('fgongs')
 dir.create(fgong_dir, showWarnings=FALSE)
 
-for (exp_dir in c('exp_alpha', 'exp_Y')) {
-    dirs <- dir(exp_dir)
-    load_experiment_info(exp_dir, dirs)
+for (exp_dir in list.dirs(exp_dirs, recursive=FALSE)) {
+    experiments <- list.dirs(exp_dir, recursive=FALSE)
+    load_experiment_info(exp_dir, experiments)
     
     ###########################################################
     ### Find profile files at different stages of evolution ###
     ###########################################################
     print("Finding profile files")
     modelS <- read.table('modelS.dat', header=TRUE) 
-    saved_pro_file <- paste0(".", exp_dir, "_profile_nos")
+    saved_pro_file <- file.path(exp_dirs, 
+        paste0(".", basename(exp_dir), "_profile_nos"))
     if (file.exists(saved_pro_file)) {
         load(saved_pro_file)
     } else {
         profile_nos <- list()
         ## Find profiles at the pre-main sequence and solar age
-        for (simulation in dirs) {
-            log_dir <- file.path(exp_dir, simulation, 'LOGS')
+        for (experiment in experiments) {
+            log_dir <- file.path(experiment, 'LOGS')
             log_files <- dir(log_dir)
             log_nos <- as.numeric(gsub('\\D', '', log_files))
             log_files <- log_files[order(log_nos)]
@@ -84,7 +86,7 @@ for (exp_dir in c('exp_alpha', 'exp_Y')) {
         plot_subdir <- file.path(plot_dir, ev_stage)
         dir.create(plot_subdir, showWarnings=FALSE)
         
-        fgong_subdir <- file.path(fgong_dir, exp_dir, ev_stage)
+        fgong_subdir <- file.path(fgong_dir, basename(exp_dir), ev_stage)
         dir.create(fgong_subdir, showWarnings=FALSE, recursive=TRUE)
         for (pro_file in profile_nos[[ev_stage]]) {
             fgong_file <- paste0(pro_file, '.FGONG')
@@ -125,8 +127,8 @@ for (exp_dir in c('exp_alpha', 'exp_Y')) {
             y_min <- ifelse(ev_stage=="solar-like", min(modelS_y), Inf)
             y_max <- ifelse(ev_stage=="solar-like", max(modelS_y), -Inf)
             x_max <- 1
-            for (simulation in dirs) {
-                sim_no <- grep(simulation, profile_nos[[ev_stage]])
+            for (experiment in experiments) {
+                sim_no <- grep(experiment, profile_nos[[ev_stage]])
                 data_file <- file.path(profile_nos[[ev_stage]][sim_no])
                 if (file.exists(data_file)) {
                     data <- read.table(data_file, header=TRUE, skip=5)
@@ -142,14 +144,15 @@ for (exp_dir in c('exp_alpha', 'exp_Y')) {
             }
             
             # Preallocate interpolation matrix
-            interps <- matrix(nrow=length(approx_xout), ncol=length(dirs))
+            interps <- matrix(nrow=length(approx_xout), 
+                              ncol=length(experiments))
             
             ##############################
             ### Plot internal profiles ###
             ##############################
             sim_i <- 0
-            for (simulation in dirs) {
-                sim_no <- grep(simulation, profile_nos[[ev_stage]])
+            for (experiment in experiments) {
+                sim_no <- grep(experiment, profile_nos[[ev_stage]])
                 data_file <- file.path(profile_nos[[ev_stage]][sim_no])
                 if (file.exists(data_file)) {
                     sim_i <- sim_i + 1
@@ -229,12 +232,11 @@ for (exp_dir in c('exp_alpha', 'exp_Y')) {
     ### Plot HR diagram ###
     #######################
     print("Plotting HR diagram")
-    cairo_pdf(file.path(plot_dir, paste0(exp_dir, '_HR.pdf')), 
+    cairo_pdf(file.path(plot_dir, paste0(basename(exp_dir), '_HR.pdf')), 
               width=6, height=6, family=font)
     sim_i <- 0
-    for (simulation in dirs) {
-        data_file <- file.path(exp_dir, simulation, 
-            'LOGS', 'history.data')
+    for (experiment in experiments) {
+        data_file <- file.path(experiment, 'LOGS', 'history.data')
         if (file.exists(data_file)) { 
             sim_i <- sim_i + 1
             data <- read.table(data_file, header=TRUE, skip=5)
@@ -256,7 +258,7 @@ for (exp_dir in c('exp_alpha', 'exp_Y')) {
                 lines(HR, col=cl[sim_i])
             }
             for (ev_stage in names(profile_nos)) {
-                sim_num <- grep(simulation, profile_nos[[ev_stage]])
+                sim_num <- grep(experiment, profile_nos[[ev_stage]])
                 pro_num <- as.numeric(sub('.data', '', 
                     sub(".+profile", '', profile_nos[[ev_stage]][sim_num])))
                 points(data$log_Teff[data$model_number==pro_num],
