@@ -21,12 +21,13 @@ exp() {
     dirname='exp'/$1
     mkdir -p $dirname
     parameter=$(bc -l <<< 'scale=2; '$i'/'$2)
+    if [ ${parameter:0:1} == "." ]; then parameter='0'$parameter; fi
     cp -r 1M_pre_ms_to_rg_template $dirname/$parameter
     cd $dirname/$parameter
     change "$3" "$4" "$parameter"
     
     ./mk
-    run "zams"
+    run "ZAMS"
     mv LOGS/history.data .
     change "write_profiles_flag" ".false." ".true."
     change "stop_near_zams" ".true." ".false."
@@ -35,7 +36,7 @@ exp() {
     rerun "H-exhausted"
     change "write_profiles_flag" ".true." ".false."
     change "xa_central_lower_limit(1)" "1d-3" "0"
-    rerun "TP"
+    rerun "RGB"
     
     mv history.data LOGS
     cd -
