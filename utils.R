@@ -64,7 +64,7 @@ make_legend <- function(labls, ev_stage, position='left', lty=TRUE) {
 
 start_dev <- function(maintext, fname, exp, ev_stage, width=c(.425,.425,.15)) {
     cairo_pdf(file.path(plot_subdir, 
-        paste0(ev_stage, '-', exp, '_', fname, '.pdf')),
+        paste0(ev_stage, '-', basename(exp), '_', fname, '.pdf')),
               width=6, height=6, family=font)
     layout(matrix(c(1,1,1,2,3,4,5,6,4), ncol=3, byrow=TRUE), 
            heights=c(0.1,0.45,0.45), widths=width)
@@ -78,24 +78,25 @@ start_dev <- function(maintext, fname, exp, ev_stage, width=c(.425,.425,.15)) {
 load_experiment_info <- function(exp, dirs) {
     print(exp)
     print(dirs)
-    if (grepl('exp_Y', exp)) {
+    if (grepl('Y', exp)) {
         experiment <<- 'helium'
         sun_num <<- grep('.28', dirs)[1]
-    } else if (grepl('exp_alpha', exp)) {
+    } else if (grepl('alpha', exp)) {
         experiment <<- 'mixing length'
         sun_num <<- grep('2.10', dirs)[1]
     }
     
-    freep <<- as.name(sub('.+_', '', basename(exp)))
+    freep <<- as.name(sub('.+_', '', basename(exp))) #as.name(basename(exp))
     cl <<- heat.colors(length(dirs)+color_offset)[1:length(dirs)]
     cl <<- c(cl[1:(sun_num-1)], "black", cl[(sun_num+1):length(cl)])
-    labls <<- sapply(sub('.+_', '', dirs), 
+    labls <<- sapply(sub('.+_', '', dirs), #dirs,
         function(x) { as.expression(bquote(.(freep) ~ "=" ~ .(x))) })
+    
+    print(freep)
+    print(labls)
 }
 
-add.alpha <- function(col, alpha=1){
-    if(missing(col))
-        stop("Please provide a vector of colours.")
-    apply(sapply(col, col2rgb)/255, 2, function(x) 
-        rgb(x[1], x[2], x[3], alpha=alpha))
+Mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
 }
