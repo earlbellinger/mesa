@@ -22,59 +22,90 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
     print("Finding profile files")
     modelS <- read.table('modelS.dat', header=TRUE) 
     saved_pro_file <- file.path(experiments, 
-        paste0(".", basename(experiment), "_profile_nos"))
-    if (file.exists(saved_pro_file)) {
-        load(saved_pro_file)
-    } else {
-        profile_nos <- list()
-        
-        ## Find profiles at the solar age
-        for (simulation in simulations) {
-            log_dir <- file.path(simulation, 'LOGS')
-            log_files <- dir(log_dir)
-            log_nos <- as.numeric(gsub('\\D', '', log_files))
-            log_files <- log_files[order(log_nos)]
-            
-            best_solar_log <- NA
-            best_age_diff <- Inf
-            
-            for (log_i in grep('profile\\d+.data$', log_files)) {
-                log_file <- file.path(log_dir, log_files[log_i])
-                profile <- read.table(log_file, skip=1, nrows=1, header=TRUE)
-                
-                age <- profile$star_age
-                age_diff <- abs(age - solar_age)
-                if (age_diff < best_age_diff) {
-                    best_solar_log <- log_file
-                    best_age_diff <- age_diff
-                }
-                if (age_diff > best_age_diff) break
-            }
-            profile_nos[["solar-like"]] <- c(profile_nos[["solar-like"]], 
-                best_solar_log)
-            profile_nos[["H-exhausted"]] <- c(profile_nos[["H-exhausted"]],
-                file.path(simulation, "LOGS", "profile_H-exhausted.data"))
-            profile_nos[["ZAMS"]] <- c(profile_nos[["ZAMS"]],
-                file.path(simulation, "LOGS", "profile_ZAMS.data"))
+        paste0(".", basename(experiment), "_pro_files"))
+    pro_files <- list()
+    for (simulation in simulations) {
+        files <- list.files(file.path(simulation, "LOGS"))
+        ev_pro_files <- grep('profile_.+.data$', files)
+        for (ev_pro_file in ev_pro_files) {
+            ev_stage <- sub('.data','',sub('profile_','',files[ev_pro_file]))
+            pro_files[[ev_stage]] <- c(pro_files[[ev_stage]], 
+                file.path(simulation, 'LOGS', files[ev_pro_file]))
         }
-        save(profile_nos, file=saved_pro_file)
     }
-    print(profile_nos)
+    
+    #######################
+    ### Plot HR diagram ###
+    #######################
+    print("Plotting HR diagram")
+    cairo_pdf(file.path(plot_dir, paste0('HR_', basename(experiment), '.pdf')), 
+              width=6, height=6, family=font)
+    seismology <- list()
+    sim_i <- 0
+    for (simulation in simulations) {
+        data_file <- file.path(simulation, 'LOGS', 'history.data')
+        if (file.exists(data_file)) { 
+            sim_i <- sim_i + 1
+            data <- read.table(data_file, header=TRUE, skip=5)
+            start <- which(data$log_L == min(data$log_L))
+            log_L <- data$log_L[-1:-start]
+            log_Teff <- data$log_Teff[-1:-start]
+            HR <- log_L ~ log_Teff
+            if (sim_i == 1) {
+                par(bty="l", las=1, mar=c(3, 3.2, 3, 1), mgp=c(1.8, 0.25, 0))
+                plot(HR, type='l', col=cl[sim_i], 
+                     xlab=expression(log~T[eff]), 
+                     ylab=expression(log~L/L["⊙"]), 
+                     main=paste("HR diagram of Sun-like stars by", 
+                                experiment_name),
+                     xlim=rev(round(range(log_Teff)+c(0,0.05), 1)),
+                     ylim=round(range(log_L)*2+c(0,0.5), 0)/2,
+                     xaxs='i', yaxs='i', tck=0.01)
+                minor.tick(nx=5, ny=5, tick.ratio=-0.25)
+            } else {
+                lines(HR, col=cl[sim_i])
+            }
+            for (ev_stage in names(pro_files)) {
+                pros <- grep(simulation, pro_files[[ev_stage]])
+                for (pro_file in pro_files[[ev_stage]][pros]) {
+                    model <- data$model_number == read.table(pro_file, 
+                        header=TRUE, nrows=1, skip=1)$model_number
+                    points(data$log_Teff[model],
+                           data$log_L[model], 
+                           col="black", pch=21, cex=0.1)
+                    seismology[[ev_stage]] <- c(seismology[[ev_stage]], 
+                        basename(simulation),
+                        data$acoustic_cutoff[model],
+                        data$delta_nu[model], data$nu_max[model])
+                }
+            }
+        }
+    }
+    points(Teff_sun, 0, col="black")
+    points(Teff_sun, 0, col="black", pch=21, cex=0.1)
+    legend("topleft", col=cl, lty=1, bty='n', legend=labls)
+    dev.off()
     
     print("Plotting internal profiles")
-    for (ev_stage in names(profile_nos)) {
+    for (ev_stage in names(pro_files)) {
         plot_subdir <- file.path(plot_dir, ev_stage)
         dir.create(plot_subdir, showWarnings=FALSE)
         
         fgong_subdir <- file.path(fgong_dir, basename(experiment), ev_stage)
         dir.create(fgong_subdir, showWarnings=FALSE, recursive=TRUE)
-        for (pro_file in profile_nos[[ev_stage]]) {
+        for (pro_file in pro_files[[ev_stage]]) {
             fgong_file <- paste0(pro_file, '.FGONG')
             new_path <- file.path(fgong_subdir, 
                 paste0(basename(dirname(dirname(fgong_file))), '.FGONG'))
             if (file.exists(fgong_file) && !file.exists(new_path))
                 file.copy(fgong_file, new_path)
         }
+        write.table(matrix(seismology[[ev_stage]], 
+                    nrow=length(simulations), byrow=TRUE), 
+            row.names=FALSE, quote=FALSE, 
+            col.names=c('name', 'acoustic_cutoff', 'delta_nu', 'nu_max'), 
+            file=file.path(dirname(fgong_subdir), 
+                paste0('seismology_', ev_stage, '.dat')))
         
         ## Start profile difference plot device
         start_dev("Differences in", "diff", experiment, ev_stage)
@@ -106,8 +137,8 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
             y_max <- ifelse(ev_stage=="solar-like", max(modelS_y), -Inf)
             x_max <- 1
             for (simulation in simulations) {
-                sim_no <- grep(simulation, profile_nos[[ev_stage]])
-                data_file <- file.path(profile_nos[[ev_stage]][sim_no])
+                sim_no <- grep(simulation, pro_files[[ev_stage]])
+                data_file <- file.path(pro_files[[ev_stage]][sim_no])
                 if (file.exists(data_file)) {
                     data <- read.table(data_file, header=TRUE, skip=5)
                     y <- log10(data[[col_name]])
@@ -127,8 +158,8 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
             ##############################
             sim_i <- 0
             for (simulation in simulations) {
-                sim_no <- grep(simulation, profile_nos[[ev_stage]])
-                data_file <- file.path(profile_nos[[ev_stage]][sim_no])
+                sim_no <- grep(simulation, pro_files[[ev_stage]])
+                data_file <- file.path(pro_files[[ev_stage]][sim_no])
                 if (file.exists(data_file)) {
                     sim_i <- sim_i + 1
                     data <- read.table(data_file, header=TRUE, skip=5)
@@ -199,48 +230,5 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
         dev.off()
         dev.off()
     }
-    
-    #######################
-    ### Plot HR diagram ###
-    #######################
-    print("Plotting HR diagram")
-    cairo_pdf(file.path(plot_dir, paste0('HR_', basename(experiment), '.pdf')), 
-              width=6, height=6, family=font)
-    sim_i <- 0
-    for (simulation in simulations) {
-        data_file <- file.path(simulation, 'LOGS', 'history.data')
-        if (file.exists(data_file)) { 
-            sim_i <- sim_i + 1
-            data <- read.table(data_file, header=TRUE, skip=5)
-            start <- which(data$log_L == min(data$log_L))
-            HR <- data$log_L[-1:-start] ~ data$log_Teff[-1:-start]
-            if (sim_i == 1) {
-                par(bty="l", las=1, mar=c(3, 3.2, 3, 1), mgp=c(1.8, 0.25, 0))
-                plot(HR, type='l', col=cl[sim_i], 
-                     xlab=expression(log~T[eff]), 
-                     ylab=expression(log~L/L["⊙"]), 
-                     main=paste("HR diagram of Sun-like stars by", 
-                                experiment_name),
-                     xlim=rev(round(range(log_Teff[-1:-start]), 1)),
-                     ylim=round(range(log_L[-1:-start])*2, 0)/2,
-                     xaxs='i', yaxs='i', tck=0.01)
-                minor.tick(nx=5, ny=5, tick.ratio=-0.25)
-            } else {
-                lines(HR, col=cl[sim_i])
-            }
-            #for (ev_stage in names(profile_nos)) {
-            #    sim_num <- grep(simulation, profile_nos[[ev_stage]])
-            #    pro_num <- as.numeric(sub('.data', '', 
-            #        sub(".+profile", '', profile_nos[[ev_stage]][sim_num])))
-            #    points(data$log_Teff[data$model_number==pro_num],
-            #           data$log_L[data$model_number==pro_num], 
-            #           col="black", pch=21, cex=0.1)
-            #}
-        }
-    }
-    points(Teff_sun, 0, col="black")
-    points(Teff_sun, 0, col="black", pch=21, cex=0.1)
-    legend("topleft", col=cl, lty=1, bty='n', legend=labls)
-    dev.off()
 }
 warnings()
