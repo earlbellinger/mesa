@@ -70,9 +70,10 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
         dir.create(fgong_subdir, showWarnings=FALSE, recursive=TRUE)
         for (pro_file in profile_nos[[ev_stage]]) {
             fgong_file <- paste0(pro_file, '.FGONG')
-            if (file.exists(fgong_file))
-                file.copy(fgong_file, file.path(fgong_subdir, 
-                    paste0(basename(dirname(dirname(fgong_file))), '.FGONG')))
+            new_path <- file.path(fgong_subdir, 
+                paste0(basename(dirname(dirname(fgong_file))), '.FGONG'))
+            if (file.exists(fgong_file) && !file.exists(new_path))
+                file.copy(fgong_file, new_path)
         }
         
         ## Start profile difference plot device
@@ -220,10 +221,8 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                      ylab=expression(log~L/L["⊙"]), 
                      main=paste("HR diagram of Sun-like stars by", 
                                 experiment_name),
-                     xlim=rev(c(round(min(data$log_Teff), 2), 
-                                round(max(data$log_Teff)+0.05, 2))),
-                     ylim=c(floor(min(data$log_L)),
-                            ceiling(max(data$log_L))),
+                     xlim=rev(round(range(log_Teff[-1:-start]), 1)),
+                     ylim=round(range(log_L[-1:-start])*2, 0)/2,
                      xaxs='i', yaxs='i', tck=0.01)
                 minor.tick(nx=5, ny=5, tick.ratio=-0.25)
             } else {
