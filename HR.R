@@ -39,7 +39,7 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
     #######################
     print("Plotting HR diagram")
     cairo_pdf(file.path(plot_dir, paste0('HR_', basename(experiment), '.pdf')), 
-              width=6, height=6, family=font)
+              width=plot_width, height=plot_height, family=font)
     seismology <- list()
     sim_i <- 0
     for (simulation in simulations) {
@@ -70,12 +70,12 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                 for (pro_file in pro_files[[ev_stage]][pros]) {
                     model <- data$model_number == read.table(pro_file, 
                         header=TRUE, nrows=1, skip=1)$model_number
-                    points(data$log_Teff[model],
+                    points(data$log_Teff[model], 
                            data$log_L[model], 
                            col="black", pch=21, cex=0.1)
                     seismology[[ev_stage]] <- c(seismology[[ev_stage]], 
-                        basename(simulation),
-                        data$acoustic_cutoff[model],
+                        basename(simulation), 
+                        data$acoustic_cutoff[model]/(2*pi), 
                         data$delta_nu[model], data$nu_max[model])
                 }
             }
@@ -206,6 +206,8 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
             x_max <- max(approx_xout[1:row_max])
             for (sim_i in 1:ncol(rel_diff)) {
                 if (sim_i == 1) {
+                    layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
+                           heights=c(0.1,0.9), widths=width)
                     par(bty='l', las=1, xpd=TRUE, 
                         mar=c(3, 4.5, 1, 1), mgp=c(3, 0.25, 0))
                     plot(approx_xout[1:row_max], rel_diff[1:row_max, sim_i], 
