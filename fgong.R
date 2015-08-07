@@ -14,7 +14,7 @@ modelS <- read.table('fgong.l5bi.d.dat')
 for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
     for (ev_stage_dir in list.dirs(experiment, recursive=FALSE)) {
         ev_stage <- basename(ev_stage_dir)
-        if (grepl('RGB', ev_stage)) next()
+        #if (grepl('RGB', ev_stage)) next()
         
         plot_subdir <- file.path(plot_dir, ev_stage)
         dir.create(plot_subdir, showWarnings=FALSE)
@@ -48,41 +48,43 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
         x_max <- -Inf
         x_min <- Inf
         max_delta_nu <- -Inf
+        nu_min <- Inf
         for (model_i in data_files) {
             seismo_row <- which(seismology$name == 
                     as.numeric(sub('.dat', '', files[model_i])))
-            cutoff_freq <- seismology$acoustic_cutoff[seismo_row]
-            
-            delta_nu <- seismology$delta_nu[seismo_row]
+            delta_nu <- seismology$delta_nu[seismo_row] 
             if (delta_nu > max_delta_nu) max_delta_nu <- delta_nu
+            
+            nu_max <- seismology$nu_max[seismo_row] 
+            cutoff_freq <- seismology$acoustic_cutoff[seismo_row] 
             
             data <- read.table(file.path(ev_stage_dir, files[model_i]))
             data <- data[data[,3] < cutoff_freq,]
+            if (nrow(data)==0) next
             if (min(data[,3]) < y_min) y_min <- min(data[,3])
             if (max(data[,3]) > y_max) y_max <- max(data[,3])
             if (max(data[,2]) > x_max) x_max <- max(data[,2])
             if (min(data[,2]) < x_min) x_min <- min(data[,2])
+            
+            nu <- data[(data[,3]<cutoff_freq) & (data[,2]>=0)
+                     & (data[,3]>(nu_max-5*delta_nu)),]
+            if (min(nu[,3]) < nu_min) nu_min <- min(nu[,3])
         }
         
+        delta_nus <- list()
+        deltas <- list()
+        noisy_delta <- list()
         for (l_mode in 0:3) {
             l_name <- if (l_mode == 0) "radial"
                  else if (l_mode == 1) "dipole"
                  else if (l_mode == 2) "quadrupole"
                  else "octupole"
             
-            if (experiment_name=='mixing length') {
-                fs <- rev(data_files)
-                tcl <- rev(cl)
-            } else {
-                fs <- data_files
-                tcl <- cl
-            }
-            
             ############################
             ### Make frequency plots ###
             ############################
             counter <- 1
-            for (model_i in fs) {
+            for (model_i in data_files) {
                 seismo_row <- which(seismology$name == 
                     as.numeric(sub('.dat', '', files[model_i])))
                 cutoff_freq <- seismology$acoustic_cutoff[seismo_row]
@@ -100,7 +102,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                          xlim=c(min(0, x_min-1), x_max), 
                          ylim=c(0, round(y_max+50, -2)),
                          yaxs='i', xaxs='i',
-                         col=tcl[counter], 
+                         col=cl[counter], 
                          tck=0.01, 
                          xlab='',
                          ylab=bquote(.(l_name)~"frequency"~nu~"["*mu*Hz*"]"))
@@ -111,7 +113,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                     minor.tick(nx=5, ny=5, tick.ratio=-0.15)
                 } else {
                     points(relation, pch=20, cex=0.01, 
-                           col=tcl[counter], lwd=0.5)
+                           col=cl[counter], lwd=0.5)
                 }
                 counter <- counter + 1
             }
@@ -128,13 +130,20 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             #############################
             ### Make difference plots ###
             #############################
-            n_range <- min(ref[,2]):max(ref[,2])
+            print(ref[,2])
+            n_range <- if (length(ref[,2])>0) min(ref[,2]):max(ref[,2]) else c()
             diffs <- matrix(nrow=max(ref[,2])-min(ref[,2])+1, #x_max-x_min+1,
                             ncol=length(simulations))
             counter <- 1
-            for (model_i in fs) {
+            for (model_i in data_files) {
+                seismo_row <- which(seismology$name == 
+                    as.numeric(sub('.dat', '', files[model_i])))
+                cutoff_freq <- seismology$acoustic_cutoff[seismo_row]
+                
                 data <- read.table(file.path(ev_stage_dir, files[model_i]))
                 ell <- data[data[,1]==l_mode,]
+                ell <- ell[ell[,3]<cutoff_freq,]
+                
                 x_counter <- 1
                 for (x in n_range) {
                     diffs[x_counter, counter] <- 
@@ -148,7 +157,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                 counter <- counter + 1
             }
             counter <- 1
-            for (model_i in fs) {
+            for (model_i in data_files) {
                 if (counter == 1) {
                     par(bty="l", las=1, mar=c(3, 3.6, 1, 1), 
                         mgp=c(2.2, 0.25, 0))
@@ -157,7 +166,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                          xlim=c(min(0, min(n_range)-1), max(n_range)), 
                          ylim=range(diffs[complete.cases(diffs)]),
                          xaxs='i', lwd=0.5,
-                         col=tcl[counter], 
+                         col=cl[counter], 
                          tck=0.01, 
                          xlab='',
                          ylab=bquote({delta * omega["\u2113"==.(l_mode)] /
@@ -168,7 +177,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                 } else {
                     points(n_range,#x_min:x_max, 
                            diffs[,counter], pch=20, cex=0.01, lwd=0.5,
-                           col=tcl[counter])
+                           col=cl[counter])
                 }
                 counter <- counter + 1
             }
@@ -184,47 +193,67 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             ### Make Echelle plots ###
             ##########################
             counter <- 1
-            for (model_i in fs) {
+            for (model_i in data_files) {
                 seismo_row <- which(seismology$name == 
-                    as.numeric(sub('.dat', '', files[model_i])))
-                delta_nu <- seismology$delta_nu[seismo_row]
+                    as.numeric(sub('.dat', '', files[model_i]))) 
+                delta_nu <- seismology$delta_nu[seismo_row] 
+                nu_max <- seismology$nu_max[seismo_row] 
+                cutoff_freq <- seismology$acoustic_cutoff[seismo_row] 
+                
                 data <- read.table(file.path(ev_stage_dir, files[model_i]))
                 ell <- data[data[,1]==l_mode,]
-                ell <- ell[ell[,3]<cutoff_freq,]
+                ell <- ell[(ell[,3]<cutoff_freq) & (ell[,2]>=0)
+                         & (ell[,3]>(nu_max-5*delta_nu)),]
+                #delta_nu <- median(diff(ell[,3]))
+                fit <- lm(ell[,3] ~ ell[,2], 
+                    weights=dnorm(ell[,3], nu_max, 
+                    ((0.66*nu_max**0.88)/(2*sqrt(2*log(2))))))
+                delta_nu <- coef(fit)[2]
+                l_name <- toString(l_mode)
+                delta_nus[[l_name]] <- c(delta_nus[[l_name]], delta_nu)
+                deltas[[l_name]] <- c(deltas[[l_name]], 
+                    summary(fit)$coefficients[2,2])
                 relation <- ell[,3] ~ ell[,3]%%delta_nu
                 if (l_mode == 0 && counter == 1) {
                     layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
-                           heights=c(0.14,0.86), widths=c(.86, .14))
+                           heights=c(0.14,0.86), widths=c(.85, .15))
                     par(mar=rep(0,4))
                     plot.new()
                     text(0.5, 0.5, paste("Echelle diagram of", ev_stage, 
                          "stars\nby", experiment_name), cex=2, font=2)
-                    par(bty="l", las=1, mar=c(3, 3.2, 0.1, 0.1), 
-                        mgp=c(1.8, 0.25, 0))
-                    plot(relation, pch=l_mode, col=tcl[counter],
-                         main="",
-                         ylim=c(0, round(y_max+50, -2)),
-                         xlim=c(0, max_delta_nu),
+                    par(bty="l", las=1, mar=c(3, 3.4, 0.1, 0.1), 
+                        mgp=c(2, 0.25, 0))
+                    plot(relation, pch=l_mode, col=cl[counter],
+                         main="", cex=0.75,
+                         ylim=c(round(nu_min-500,-3), round(y_max+1000, -3)),
+                         xlim=c(0, round(max_delta_nu+5, -1)),
                          xlab="", xaxs='i', yaxs='i', tck=0.01, 
                          ylab=bquote("frequency"~nu~"["*mu*Hz*"]"))
                     title(xlab=expression(nu~mod~Delta*nu), 
                           mgp=par()$mgp-c(0.4,0,0))
                     minor.tick(nx=5, ny=5, tick.ratio=-0.15)
                 } else {
-                    points(relation, pch=l_mode, col=tcl[counter])
+                    points(relation, pch=l_mode, col=cl[counter], cex=0.75)
                 }
+                abline(v=delta_nu, col=cl[counter], lty=l_mode+1, lwd=0.5)
                 counter <- counter+1
             }
             if (l_mode==3) {
                 par(mar=rep(0,4))
                 plot.new()
-                legend(-0.1, 0.85, bty='n', inset=0, col=tcl, pch=20, 
+                legend(-0.1, 0.9, bty='n', inset=0, col=cl, pch=20, 
                        legend=labls)
-                legend(0.1, 0.4, bty='n', inset=0, pch=0:3, 
+                legend(0.1, 0.45, bty='n', inset=0, pch=0:3, 
                        legend=c(expression("\u2113"==0), 
                                 expression("\u2113"==1),
                                 expression("\u2113"==2),
                                 expression("\u2113"==3)))
+                
+                legend(-0.1, 0.25, bty='n', inset=0, lty=1:4, 
+                       legend=c(expression(Delta*nu["\u2113"==0]), 
+                                expression(Delta*nu["\u2113"==1]),
+                                expression(Delta*nu["\u2113"==2]),
+                                expression(Delta*nu["\u2113"==3])))
             }
             dev.set(dev.next())
             dev.set(dev.next())
@@ -232,6 +261,104 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
         dev.off()
         dev.off()
         dev.off()
+        
+        ################################
+        ### Make plots of exp vs dnu ###
+        ################################
+        cairo_pdf(file.path(plot_dir, ev_stage, 
+            paste0('ell_', basename(experiment), '_', ev_stage, '.pdf')), 
+            width=plot_width, height=plot_height, family=font)
+        layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
+               heights=c(0.14,0.86), widths=c(.85, .15))
+        par(mar=rep(0,4))
+        plot.new()
+        text(0.5, 0.5, paste("Large frequency separation of", ev_stage,
+             "\nstars by", experiment_name), cex=2, font=2)
+        par(bty="l", las=1, mar=c(3, 3.4, 0.1, 0.1), 
+            mgp=c(2, 0.25, 0))
+        for (l_mode in 0:3) {
+            relation <- delta_nus[[toString(l_mode)]] ~ exp_vals
+            if (l_mode == 0) {
+                plot(relation, pch=l_mode, main="", xlab="", 
+                     tck=0.01, ylim=range(delta_nus),
+                     ylab=expression("large frequency separation"~Delta*nu))
+                title(xlab=bquote(.(experiment_name)~.(freep)), 
+                      mgp=par()$mgp-c(0.4,0,0))
+                lines(relation, lty=l_mode+1)
+                minor.tick(nx=5, ny=5, tick.ratio=-0.15)   
+                } else {
+                    points(relation, pch=l_mode)
+                    lines(relation, lty=l_mode+1)
+                }
+            }
+        par(mar=rep(0,4))
+        plot.new()
+        legend("left", bty='n', inset=0, pch=0:3, lty=1:4,
+               legend=c(expression("\u2113"==0), 
+                        expression("\u2113"==1),
+                        expression("\u2113"==2),
+                        expression("\u2113"==3)))
+        dev.off()
+        
+        #####################################
+        ### Make plots of exp vs dnu diff ###
+        #####################################
+        cairo_pdf(file.path(plot_dir, ev_stage, 
+            paste0('elldiff_', basename(experiment), '_', ev_stage, '.pdf')), 
+            width=plot_width, height=plot_height, family=font)
+        layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
+               heights=c(0.14,0.86), widths=c(.85, .15))
+        par(mar=rep(0,4))
+        plot.new()
+        text(0.5, 0.5, paste("Differences in Δν of", ev_stage,
+             "\nstars by", experiment_name), cex=2, font=2)
+        par(bty="l", las=1, mar=c(3, 3.4, 0.1, 0.1), 
+            mgp=c(2, 0.25, 0))
+        y_max <- -Inf
+        y_min <- Inf
+        for (l_mode in 1:3) {
+            y <- delta_nus[[toString(l_mode)]] - delta_nus[["0"]]
+            if (max(y) > y_max) y_max <- max(y)
+            if (min(y) < y_min) y_min <- min(y)
+        }
+        for (l_mode in 1:3) {
+            middle_i <- round(median(1:length(exp_vals)))
+            l_name <- toString(l_mode)
+            difference <- delta_nus[[l_name]] - delta_nus[["0"]]
+            relation <- difference ~ exp_vals
+            if (l_mode == 1) {
+                plot(relation, pch=l_mode, main="", xlab="", yaxs='i',
+                     tck=0.01, ylim=c(round(y_min), round(y_max+0.5)),
+                     ylab=expression("difference in large frequency separation"
+                                     ~delta*Delta*nu["\u2113"==x]==
+                                     Delta*nu["\u2113"==x]-
+                                     Delta*nu["\u2113"==0]))
+                title(xlab=bquote(.(experiment_name)~.(freep)), 
+                      mgp=par()$mgp-c(0.4,0,0))
+                lines(relation, lty=l_mode+1)
+                errbar(exp_vals[middle_i], 0, 0, deltas[["0"]][middle_i]/2,
+                    add=TRUE)
+                #segments(exp_vals[middle_i], 0, exp_vals[middle_i], 
+                #    deltas[["0"]][middle_i]/2)
+                minor.tick(nx=5, ny=5, tick.ratio=-0.15)   
+            } else {
+                points(relation, pch=l_mode)
+                lines(relation, lty=l_mode+1)
+            }
+            errbar(exp_vals[middle_i], difference[middle_i], 
+                difference[middle_i] - deltas[[l_name]][middle_i]/2,
+                difference[middle_i] + deltas[[l_name]][middle_i]/2,
+                add=TRUE, pch=l_mode)
+        }
+        
+        par(mar=rep(0,4))
+        plot.new()
+        legend("left", bty='n', inset=0, pch=1:3, lty=2:4,
+            legend=c(expression(delta*Delta*nu["\u2113"==1]), 
+                     expression(delta*Delta*nu["\u2113"==2]),
+                     expression(delta*Delta*nu["\u2113"==3])))
+        dev.off()
+        
     }
 }
 warnings()
