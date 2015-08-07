@@ -108,7 +108,7 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                 paste0('seismology_', ev_stage, '.dat')))
         
         ## Start profile difference plot device
-        start_dev("Differences in", "diff", experiment, ev_stage)
+        start_dev("Profile differences in", "diff", experiment, ev_stage)
         start_dev("Profiles of", "profile", experiment, ev_stage)
         
         ## Iterate through the different internal profiles
@@ -206,8 +206,8 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
             x_max <- max(approx_xout[1:row_max])
             for (sim_i in 1:ncol(rel_diff)) {
                 if (sim_i == 1) {
-                    layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
-                           heights=c(0.1,0.9), widths=width)
+                    #layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
+                    #       heights=c(0.1,0.9), widths=layout_width)
                     par(bty='l', las=1, xpd=TRUE, 
                         mar=c(3, 4.5, 1, 1), mgp=c(3, 0.25, 0))
                     plot(approx_xout[1:row_max], rel_diff[1:row_max, sim_i], 
