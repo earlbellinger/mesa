@@ -49,6 +49,7 @@ approx_xout <- seq(0, 1, .04)
 color_offset <- 6
 plot_width <- 6
 plot_height <- 6
+layout_width <- c(.425,.425,.15)
 
 make_legend <- function(labls, ev_stage, position='left', lty=TRUE) {
     par(mar=rep(0,4))
@@ -67,7 +68,7 @@ make_legend <- function(labls, ev_stage, position='left', lty=TRUE) {
 }
 
 start_dev <- function(maintext, plot_name, experiment, ev_stage, 
-                      width=c(.425,.425,.15)) {
+                      width=layout_width) {
     cairo_pdf(file.path(plot_subdir, 
         paste0(plot_name, '_', basename(experiment), '_', ev_stage, '.pdf')),
               width=plot_width, height=plot_height, family=font)
@@ -97,6 +98,7 @@ load_experiment_info <- function(experiment, simulations) {
     freep <<- as.name(basename(experiment))
     cl <<- heat.colors(length(simulations)+color_offset)[1:length(simulations)]
     cl <<- c(cl[1:(sun_num-1)], "black", cl[(sun_num+1):length(cl)])
+    exp_vals <<- as.numeric(basename(simulations))
     labls <<- sapply(simulations,
         function(x) { as.expression(bquote(.(freep) ~ "=" ~ .(basename(x)))) })
     
