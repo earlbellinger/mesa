@@ -133,8 +133,8 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
             modelS_y <- log10(modelS[[col_name]])
             
             ## Find plot limits 
-            y_min <- ifelse(ev_stage=="solar-like", min(modelS_y), Inf)
-            y_max <- ifelse(ev_stage=="solar-like", max(modelS_y), -Inf)
+            y_min <- ifelse(ev_stage=="solar-age", min(modelS_y), Inf)
+            y_max <- ifelse(ev_stage=="solar-age", max(modelS_y), -Inf)
             x_max <- 1
             for (simulation in simulations) {
                 sim_no <- grep(simulation, pro_files[[ev_stage]])
@@ -183,7 +183,7 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                     }
                 }
             }
-            if (ev_stage=="solar-like") ## plot Model S
+            if (ev_stage=="solar-age") ## plot Model S
                 lines(modelS$radius, modelS_y, col='black', lty=2)
             if (col_name=="density") make_legend(labls, ev_stage)
             dev.set(dev.prev())
@@ -191,7 +191,7 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
             ################################
             ### Plot profile differences ###
             ################################
-            ref <- if(ev_stage=="solar-like")
+            ref <- if(ev_stage=="solar-age")
                 approx(modelS$radius, modelS_y, n=length(approx_xout), 
                        xout=approx_xout, rule=2)$y
             else interps[,sun_num]
