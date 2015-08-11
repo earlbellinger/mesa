@@ -3,6 +3,9 @@
 #### Stellar Ages & Galactic Evolution Group 
 #### Max-Planck-Institut fur Sonnensystemforschung 
 
+library(RColorBrewer)
+library(magicaxis)
+
 source('utils.R')
 
 fgong_dir <- file.path('fgongs')
@@ -205,14 +208,41 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                 ell <- ell[(ell[,3]<cutoff_freq) & (ell[,2]>=0)
                          & (ell[,3]>(nu_max-5*delta_nu)),]
                 #delta_nu <- median(diff(ell[,3]))
-                fit <- lm(ell[,3] ~ ell[,2], 
-                    weights=dnorm(ell[,3], nu_max, 
-                    ((0.66*nu_max**0.88)/(2*sqrt(2*log(2))))))
+                converted_fwhm <- (0.66*nu_max**0.88)/(2*sqrt(2*log(2)))
+                gaussian_env <- dnorm(ell[,3], nu_max, converted_fwhm)
+                fit <- lm(ell[,3] ~ ell[,2], weights=gaussian_env)
                 delta_nu <- coef(fit)[2]
                 l_name <- toString(l_mode)
                 delta_nus[[l_name]] <- c(delta_nus[[l_name]], delta_nu)
                 deltas[[l_name]] <- c(deltas[[l_name]], 
                     summary(fit)$coefficients[2,2])
+                
+                ### estimate std errors
+                out <- rep(0, 100)
+                d <- if (l_mode == 0) 0.91
+                else if (l_mode == 1) 0.61
+                else if (l_mode == 2) 0.87
+                else if (l_mode == 3) 1.4
+                for (ii in 1:100) {
+                    new_fit <- lm(ell[,3] + rnorm(nrow(ell), 0, d) ~ ell[,2], 
+                        weights=gaussian_env)
+                    out[ii] <- summary(new_fit)$coefficients[2,2]
+                    #coef(new_fit)[2]
+                    #noisy_nu <- ell[,3] + rnorm(nrow(ell), 0, 1)
+                    #new_ns <- 1:nrow(ell)
+                    ##new_ns <- sample(nrow(ell),replace=T)
+                    #new_fit <- lm(noisy_nu[new_ns] ~ ell[new_ns,2], 
+                    #    weights=gaussian_env[new_ns])
+                    #print(summary(new_fit)$sigma**2)
+                    #out[ii] <- summary(new_fit)$coefficients[2,2]
+                    ##coef(new_fit)[2]
+                }
+                noisy_delta[[l_name]] <- c(noisy_delta[[l_name]],
+                    mean(out))
+                print(c(summary(fit)$coefficients[2,2], mean(out), max(out)))
+                #    sqrt((0.1 + summary(fit)$sigma**2)
+                #          * summary(fit)$cov.unscaled[2,2])))
+                
                 relation <- ell[,3] ~ ell[,3]%%delta_nu
                 if (l_mode == 0 && counter == 1) {
                     layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
@@ -286,11 +316,11 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                       mgp=par()$mgp-c(0.4,0,0))
                 lines(relation, lty=l_mode+1)
                 minor.tick(nx=5, ny=5, tick.ratio=-0.15)   
-                } else {
-                    points(relation, pch=l_mode)
-                    lines(relation, lty=l_mode+1)
-                }
+            } else {
+                points(relation, pch=l_mode)
+                lines(relation, lty=l_mode+1)
             }
+        }
         par(mar=rep(0,4))
         plot.new()
         legend("left", bty='n', inset=0, pch=0:3, lty=1:4,
@@ -303,16 +333,16 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
         #####################################
         ### Make plots of exp vs dnu diff ###
         #####################################
+        ell_cl <- brewer.pal(4, "BrBG")
         cairo_pdf(file.path(plot_dir, ev_stage, 
             paste0('elldiff_', basename(experiment), '_', ev_stage, '.pdf')), 
             width=plot_width, height=plot_height, family=font)
-        layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
-               heights=c(0.14,0.86), widths=c(.85, .15))
+        layout(matrix(c(1,2), ncol=1, byrow=TRUE), heights=c(0.14,0.86))
         par(mar=rep(0,4))
         plot.new()
         text(0.5, 0.5, paste("Differences in Δν of", ev_stage,
-             "\nstars by", experiment_name), cex=2, font=2)
-        par(bty="l", las=1, mar=c(3, 3.4, 0.1, 0.1), 
+             "\nstars by degree and", experiment_name), cex=2, font=2)
+        par(bty="l", las=1, mar=c(3, 3.4, 0.1, 1), 
             mgp=c(2, 0.25, 0))
         y_max <- -Inf
         y_min <- Inf
@@ -322,41 +352,42 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             if (min(y) < y_min) y_min <- min(y)
         }
         for (l_mode in 1:3) {
-            middle_i <- round(median(1:length(exp_vals)))
+            i_mid <- round(median(1:length(exp_vals)))
             l_name <- toString(l_mode)
             difference <- delta_nus[[l_name]] - delta_nus[["0"]]
             relation <- difference ~ exp_vals
             if (l_mode == 1) {
                 plot(relation, pch=l_mode, main="", xlab="", yaxs='i',
+                     col=ell_cl[l_mode+1],
                      tck=0.01, ylim=c(round(y_min), round(y_max+0.5)),
-                     ylab=expression("difference in large frequency separation"
-                                     ~delta*Delta*nu["\u2113"==x]==
-                                     Delta*nu["\u2113"==x]-
-                                     Delta*nu["\u2113"==0]))
+                     ylab=expression("large frequency separation difference"
+                                     ~delta*Delta*nu["\u2113"]==
+                                     Delta*nu["\u2113"]-
+                                     Delta*nu[0]))
                 title(xlab=bquote(.(experiment_name)~.(freep)), 
                       mgp=par()$mgp-c(0.4,0,0))
-                lines(relation, lty=l_mode+1)
-                errbar(exp_vals[middle_i], 0, 0, deltas[["0"]][middle_i]/2,
-                    add=TRUE)
-                #segments(exp_vals[middle_i], 0, exp_vals[middle_i], 
-                #    deltas[["0"]][middle_i]/2)
-                minor.tick(nx=5, ny=5, tick.ratio=-0.15)   
+                lines(relation, lty=l_mode+1, col=ell_cl[l_mode+1])
+                errbar(exp_vals[i_mid], 0, 0, 
+                    noisy_delta[["0"]][i_mid]/2, 
+                    add=TRUE, lty=5, pch='-')
+                magaxis(side=1:4, labels=FALSE)
             } else {
-                points(relation, pch=l_mode)
-                lines(relation, lty=l_mode+1)
+                points(relation, pch=l_mode, col=ell_cl[l_mode+1])
+                lines(relation, lty=l_mode+1, col=ell_cl[l_mode+1])
             }
-            errbar(exp_vals[middle_i], difference[middle_i], 
-                difference[middle_i] - deltas[[l_name]][middle_i]/2,
-                difference[middle_i] + deltas[[l_name]][middle_i]/2,
-                add=TRUE, pch=l_mode)
+            i_off <- 1
+            if (l_mode == 2) i_off <- -1
+            if (l_mode == 3) i_off <- 0
+            errbar(exp_vals[i_mid+i_off], difference[i_mid+i_off], 
+                 difference[i_mid+i_off] - noisy_delta[[l_name]][i_mid+i_off]/2,
+                 difference[i_mid+i_off] + noisy_delta[[l_name]][i_mid+i_off]/2,
+                 add=TRUE, pch=l_mode, lty=5, 
+                 col=ell_cl[l_mode+1], errbar.col=ell_cl[l_mode+1])
         }
-        
-        par(mar=rep(0,4))
-        plot.new()
-        legend("left", bty='n', inset=0, pch=1:3, lty=2:4,
-            legend=c(expression(delta*Delta*nu["\u2113"==1]), 
-                     expression(delta*Delta*nu["\u2113"==2]),
-                     expression(delta*Delta*nu["\u2113"==3])))
+        legend("topright", bty='n', inset=0, pch=1:3, lty=2:4, col=ell_cl[2:4],
+            legend=c(expression(delta*Delta*nu[1]), 
+                     expression(delta*Delta*nu[2]),
+                     expression(delta*Delta*nu[3])))
         dev.off()
         
     }
