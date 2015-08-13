@@ -95,11 +95,11 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                 data <- read.table(file.path(ev_stage_dir, files[model_i]))
                 ell <- data[data[,1]==l_mode,]
                 ell <- ell[ell[,3]<cutoff_freq,]
-                if (!grepl('solar-like', ev_stage) && counter == sun_num)
+                if (!grepl('solar-age', ev_stage) && counter == sun_num)
                     ref <- ell
                 relation <- ell[,3] ~ ell[,2]
                 if (counter == 1) {
-                    par(bty="l", las=1, mar=c(3, 3.6, 1, 1), 
+                    par(bty="l", las=1, mar=c(3, 3.6, 1, 1), cex.lab=1.3,
                         mgp=c(2.2, 0.25, 0))
                     plot(relation, pch=20, cex=0.01, lwd=0.5,
                          xlim=c(min(0, x_min-1), x_max), 
@@ -120,7 +120,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                 }
                 counter <- counter + 1
             }
-            if (grepl('solar-like', ev_stage)) {
+            if (grepl('solar-age', ev_stage)) {
                 ell <- modelS[modelS[,1]==l_mode,]
                 ell <- ell[ell[,3]<y_max,]
                 relation <- ell[,3] ~ ell[,2]
@@ -137,7 +137,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             n_range <- if (length(ref[,2])>0) min(ref[,2]):max(ref[,2]) else c()
             diffs <- matrix(nrow=max(ref[,2])-min(ref[,2])+1, #x_max-x_min+1,
                             ncol=length(simulations))
-            counter <- 1
+            n_counter <- 1
             for (model_i in data_files) {
                 seismo_row <- which(seismology$name == 
                     as.numeric(sub('.dat', '', files[model_i])))
@@ -149,21 +149,22 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                 
                 x_counter <- 1
                 for (x in n_range) {
-                    diffs[x_counter, counter] <- 
+                    diffs[x_counter, n_counter] <- 
                         if (x%in%ref[,2] && x%in%ell[,2]) {
                             a <- 2*pi*Mode(unlist(ell[ell[,2]==x,][3]))
                             b <- 2*pi*Mode(unlist(ref[ref[,2]==x,][3]))
                             (a-b)/b
-                            } else NA
+                        } else NA
                     x_counter <- x_counter + 1
                 }
-                counter <- counter + 1
+                #if (all(is.na(diffs[,n_counter]))) break
+                n_counter <- n_counter + 1
             }
             counter <- 1
             for (model_i in data_files) {
                 if (counter == 1) {
-                    par(bty="l", las=1, mar=c(3, 3.6, 1, 1), 
-                        mgp=c(2.2, 0.25, 0))
+                    par(bty="l", las=1, mar=c(3, 4, 1, 1), cex.lab=1.3,
+                        mgp=c(2.5, 0.25, 0))
                     plot(n_range,#x_min:x_max, 
                          diffs[,counter], pch=20, cex=0.01,
                          xlim=c(min(0, min(n_range)-1), max(n_range)), 
@@ -172,10 +173,11 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                          col=cl[counter], 
                          tck=0.01, 
                          xlab='',
-                         ylab=bquote({delta * omega["\u2113"==.(l_mode)] /
-                                     omega["\u2113"==.(l_mode)]}))
+                         ylab=bquote("relative frequency difference"~
+                             {delta * omega["\u2113"==.(l_mode)] /
+                                      omega["\u2113"==.(l_mode)]}))
                     title(xlab=expression("radial order"~n), 
-                          mgp=par()$mgp-c(0.4,0,0))
+                          mgp=par()$mgp-c(0.5,0,0))
                     minor.tick(nx=5, ny=5, tick.ratio=-0.15)
                 } else {
                     points(n_range,#x_min:x_max, 
@@ -184,7 +186,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                 }
                 counter <- counter + 1
             }
-            if (grepl('solar-like', ev_stage)) {
+            if (grepl('solar-age', ev_stage)) {
                 ell <- modelS[modelS[,1]==l_mode,]
                 relation <- rep(0, length(ell[,2])) ~ ell[,2]
                 points(relation, pch=1, cex=0.5, col="black", lwd=0.5)
