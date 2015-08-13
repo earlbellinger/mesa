@@ -3,6 +3,8 @@
 #### Stellar Ages & Galactic Evolution Group 
 #### Max-Planck-Institut fur Sonnensystemforschung 
 
+library(magicaxis)
+
 source('utils.R')
 
 experiments <- 'exp'
@@ -61,7 +63,8 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                      xlim=rev(round(range(log_Teff)+c(0,0.05), 1)),
                      ylim=round(range(log_L)*2+c(0,0.5), 0)/2,
                      xaxs='i', yaxs='i', tck=0.01)
-                minor.tick(nx=5, ny=5, tick.ratio=-0.25)
+                #minor.tick(nx=5, ny=5, tick.ratio=-0.25)
+                magaxis(side=1:4, labels=FALSE)
             } else {
                 lines(HR, col=cl[sim_i])
             }
@@ -83,7 +86,7 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
     }
     points(Teff_sun, 0, col="black")
     points(Teff_sun, 0, col="black", pch=21, cex=0.1)
-    legend("topleft", col=cl, lty=1, bty='n', legend=labls)
+    legend("topright", col=cl, lty=1, bty='n', legend=labls)
     dev.off()
     
     print("Plotting internal profiles")
@@ -107,7 +110,7 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
             file=file.path(dirname(fgong_subdir), 
                 paste0('seismology_', ev_stage, '.dat')))
         
-        ## Start profile difference plot device
+        ## Start profile plot devices
         start_dev("Profile differences in", "diff", experiment, ev_stage)
         start_dev("Profiles of", "profile", experiment, ev_stage)
         
@@ -116,21 +119,22 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
             if (col_name=="csound") {
                 main_label <- "Sound speed"
                 symbol <- bquote(c)
-                ylabel <- expression(log~sound~speed~c~"["*cm/sec*"]")
+                ylabel <- expression(sound~speed~c~"["*cm/sec*"]")
             } else if (col_name=="density") {
                 main_label <- "Density"
                 symbol <- bquote(rho)
-                ylabel <- expression(log~density~rho~"["*g/cm^3*"]")
+                ylabel <- expression(density~rho~"["*g/cm^3*"]")
             } else if (col_name=="pressure") {
                 main_label <- "Pressure"
                 symbol <- bquote(p)
-                ylabel <- expression(log~pressure~p~"["*dyn/cm^2*"]")
+                ylabel <- expression(pressure~p~"["*dyn/cm^2*"]")
             } else if (col_name=="temperature") {
                 main_label <- "Temperature"
                 symbol <- bquote(T)
-                ylabel <- expression(log~temperature~T~"["*K*"]")
+                ylabel <- expression(temperature~T~"["*K*"]")
             }
-            modelS_y <- log10(modelS[[col_name]])
+            modelS_yt <- modelS[[col_name]]
+            modelS_y <- log10(modelS_yt)
             
             ## Find plot limits 
             y_min <- ifelse(ev_stage=="solar-age", min(modelS_y), Inf)
@@ -163,21 +167,24 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                 if (file.exists(data_file)) {
                     sim_i <- sim_i + 1
                     data <- read.table(data_file, header=TRUE, skip=5)
-                    y <- log10(data[[col_name]])
-                    interps[,sim_i] <- approx(data$radius, y, 
+                    yt <- data[[col_name]]
+                    y <- log10(yt)
+                    interps[,sim_i] <- approx(data$radius, yt, 
                         n=length(approx_xout), xout=approx_xout, rule=2)$y
                     if (sim_i == 1) {
-                        par(bty="l", las=1, 
+                        par(bty="l", las=1, cex.lab=1.3,
                             mar=c(3, 3.2, 1, 1), mgp=c(1.8, 0.25, 0))
                         plot(data$radius, y, type='l', col=cl[sim_i],
                              xlim=c(0, x_max),
-                             ylim=c(y_min, y_max+0.01*y_max), 
-                             xaxs='i', yaxs='i', tck=0.01,
-                             #xlab=expression(r/R["⊙"]), 
+                             ylim=c(y_min, y_max),#+0.01*y_max), 
+                             xaxs='i', tck=0.01, yaxt='n', yaxs='i', 
                              xlab="",
                              ylab=ylabel)
-                        title(xlab=expression(r/R["⊙"]))
-                        minor.tick(nx=5, ny=5, tick.ratio=-0.15)
+                        title(xlab=expression(fractional~radius~r/R["⊙"]))
+                        #minor.tick(nx=5, ny=5, tick.ratio=-0.15)
+                        magaxis(side=1:2, unlog='y', family=font,
+                            mgp=c(1.8, 0.25, 0),
+                            labels=c(FALSE, TRUE))
                     } else {
                         lines(data$radius, y, col=cl[sim_i])
                     }
@@ -192,33 +199,47 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
             ### Plot profile differences ###
             ################################
             ref <- if(ev_stage=="solar-age")
-                approx(modelS$radius, modelS_y, n=length(approx_xout), 
+                approx(modelS$radius, modelS_yt, n=length(approx_xout), 
                        xout=approx_xout, rule=2)$y
             else interps[,sun_num]
             rel_diff <- apply(interps, 2, function(x) {(x-ref)/ref})
             row_offset <- round(nrow(rel_diff) * 0.5, 0)
-            #core_var <- var(rel_diff[1,])
-            core_var <- max(apply(rel_diff[1:(row_offset-1),],1,var))
-            endpts <- apply(rel_diff[row_offset:nrow(rel_diff),],1,var)>core_var
-            row_max <- ifelse(any(endpts), min(which(endpts))+row_offset, 
-                nrow(rel_diff))
-            print(row_max)
+            rd <- function(x) diff(range(x))
+            core_var <- apply(rel_diff[1:(row_offset-1),],1,rd)
+            #print(core_var)
+            #print(nrow(rel_diff))
+            row_max <- if (any(core_var > 1)) {
+                min(which(core_var>0.1))
+            } else {
+                outer_var <- apply(rel_diff[row_offset:nrow(rel_diff),],1,rd)
+                endpts <- outer_var > max(core_var) & outer_var > 0.01 | 
+                          outer_var > 1
+                #max(which(endpts))+row_offset-1
+                ifelse(any(endpts), min(which(endpts))+row_offset-1, 
+                       nrow(rel_diff))
+                #ifelse(any(endpts), min(which(endpts))+row_offset, 
+                #    nrow(rel_diff))
+            }
+            if (row_max <= 1 || row_max >= nrow(rel_diff)) 
+                row_max <- nrow(rel_diff)
             x_max <- max(approx_xout[1:row_max])
             for (sim_i in 1:ncol(rel_diff)) {
                 if (sim_i == 1) {
                     #layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
                     #       heights=c(0.1,0.9), widths=layout_width)
-                    par(bty='l', las=1, xpd=TRUE, 
-                        mar=c(3, 4.5, 1, 1), mgp=c(3, 0.25, 0))
+                    par(bty='l', las=1, xpd=TRUE, cex.lab=1.3,
+                        mar=c(3, 5, 1, 1), mgp=c(2.5, 0.25, 0))
                     plot(approx_xout[1:row_max], rel_diff[1:row_max, sim_i], 
                          type='l', col=cl[sim_i],
-                         xaxs='i', yaxs='i', 
+                         xaxs='i', yaxs='i',
                          tck=0.01,
                          xlim=c(0, x_max),
                          ylim=range(rel_diff[1:row_max,]),
-                         ylab=bquote(delta * .(symbol) / .(symbol)),
+                         ylab=bquote("relative"~.(tolower(main_label))~
+                             "difference"~delta * .(symbol) / .(symbol)),
                          xlab="")
-                    title(xlab=expression(r/R["⊙"]), mgp=par()$mgp-c(1.3,0,0))
+                    title(xlab=expression("fractional radius"~r/R["⊙"]), 
+                          mgp=par()$mgp-c(0.5,0,0))
                     minor.tick(nx=5, ny=5, tick.ratio=-0.15)
                     lines(c(x_max,0), c(0, 0), lty=2)
                 } else {
@@ -230,6 +251,112 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
             dev.set(dev.next())
         }
         dev.off()
+        dev.off()
+        
+        ###########################################
+        ### Plot Lamb/Brunt-Vaisala frequencies ###
+        ###########################################
+        print("Plotting Lamb frequencies")
+        cairo_pdf(file.path(plot_subdir, paste0("lamb", '_', 
+            basename(experiment), '_', ev_stage, '.pdf')),
+            width=plot_width, height=plot_height, family=font)
+        #layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
+        #       heights=c(0.14,0.86), widths=c(.85, .15))
+        #par(mar=rep(0,4))
+        #plot.new()
+        #text(0.5, 0.5, paste("Critical frequencies of", ev_stage, 
+        #     "stars\nby", experiment_name), cex=2, font=2)
+        #par(bty="l", las=1, mar=c(3, 3.4, 2, 0.1), 
+        #    mgp=c(2, 0.25, 0))
+        
+        main_label <- "Frequency"
+        #symbol <- bquote(omega)
+        ylabel <- expression(frequency~nu~"["*mu*Hz*"]")
+        
+        #modelS_s <- modelS[["csound"]]**2/(modelS[["radius"]]*solar_radius)**2
+        #modelS_r <- modelS[["radius"]][is.finite(modelS_s)]
+        #modelS_s <- modelS_s[is.finite(modelS_s)]
+        #modelS_s1 <- log10(sqrt(1*(1+1)*modelS_s))
+        #modelS_s2 <- log10(sqrt(2*(2+1)*modelS_s))
+        #modelS_s3 <- log10(sqrt(3*(3+1)*modelS_s))
+        
+        #y_min <- ifelse(ev_stage=="solar-age", min(modelS_s1), Inf)
+        y_min <- Inf
+        y_max <- -Inf
+        #y_max <- ifelse(ev_stage=="solar-age", max(modelS_s3), -Inf)
+        x_max <- 1
+        for (simulation in simulations) {
+            sim_no <- grep(simulation, pro_files[[ev_stage]])
+            data_file <- file.path(pro_files[[ev_stage]][sim_no])
+            if (file.exists(data_file)) {
+                data <- read.table(data_file, header=TRUE, skip=5)
+                #brunt_N2 <- data[["brunt_N2"]]
+                #y <- log10(sqrt(brunt_N2[brunt_N2 > 0]))
+                #print(c(data_file, max(y)))
+                #if (min(y) < y_min) y_min <- min(y)
+                #if (max(y) > y_max) y_max <- max(y)
+                y <- data[["csound"]]**2 /
+                    (data[["radius"]]*solar_radius)**2
+                y <- y[is.finite(y)]
+                y_s1 <- log10(10**6/(2*pi) * sqrt(1*(1+1)*y))
+                y_s3 <- log10(10**6/(2*pi) * sqrt(3*(3+1)*y))
+                if (min(y_s1) < y_min) y_min <- min(y_s1)
+                if (max(y_s3) > y_max) y_max <- max(y_s3)
+                if (round(max(data$radius)+.05, 1) > x_max) 
+                    x_max <- round(max(data$radius)+.05, 1)
+            }
+        }
+        #print(c(y_min, y_max))
+        sim_i <- 0
+        for (simulation in simulations) {
+            sim_no <- grep(simulation, pro_files[[ev_stage]])
+            data_file <- file.path(pro_files[[ev_stage]][sim_no])
+            if (file.exists(data_file)) {
+                sim_i <- sim_i + 1
+                data <- read.table(data_file, header=TRUE, skip=5)
+                brunt_N2 <- data[["brunt_N2"]]
+                stable <- which(brunt_N2 >= 0)
+                indices <-  stable[which(diff(stable)!=1)[1]+1] : max(stable)
+                y <- log10(10**6/(2*pi) * sqrt(brunt_N2[indices]))
+                if (sim_i == 1) {
+                    par(las=1, mar=c(3, 3.2, 3, 1), mgp=c(1.8, 0.25, 0))
+                    plot(data$radius[indices], y, type='l', cex=0.25,
+                         col=cl[sim_i],
+                         xlim=c(0, x_max),
+                         ylim=c(y_min, y_max+0.01*y_max), 
+                         xaxs='i', yaxt='n', tck=0, #yaxs='i', 
+                         xlab="", ylab=ylabel,
+                         main=paste("Critical frequencies of", ev_stage, 
+                                    "stars\nby", experiment_name))
+                    title(xlab=expression(r/R["⊙"]))
+                    magaxis(side=1:4, unlog='y', family=font,
+                            mgp=c(1.8, 0.25, 0),
+                            labels=c(FALSE, TRUE, FALSE, FALSE))
+                } else {
+                    lines(data$radius[indices], y, 
+                          pch=20, cex=0.25, col=cl[sim_i])
+                }
+                for (ell in 1:3) {
+                    S <- data[["csound"]]**2 / 
+                        (data[["radius"]]*solar_radius)**2
+                    y <- log10(10**6/(2*pi) * sqrt(ell*(ell+1)*S))
+                    lines(data$radius, y, col=cl[sim_i], lty=ell+1)
+                }
+            }
+        }
+        #if (ev_stage=="solar-age") {## plot Model S
+        #    lines(modelS_r, modelS_s1, col='black', lty=2)
+        #    lines(modelS_r, modelS_s2, col='black', lty=3)
+        #    lines(modelS_r, modelS_s3, col='black', lty=4)
+        #}
+        #par(mar=rep(0,4))
+        #plot.new()
+        legend("topleft", bty='n', inset=0,
+               lty=1:4, legend=c("Brunt-Väisälä", 
+                        expression("Lamb"~S[1]),
+                        expression("Lamb"~S[2]),
+                        expression("Lamb"~S[3])))
+        legend("topright", bty='n', inset=0, col=cl, lty=1, legend=labls)
         dev.off()
     }
 }
