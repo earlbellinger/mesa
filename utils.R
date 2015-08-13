@@ -5,7 +5,7 @@
 
 library(Hmisc)
 
-options(warn=2)
+#options(warn=2)
 
 minor.tick <- function (nx = 2, ny = 2, tick.ratio = 0.5) {
     ax <- function(w, n, tick.ratio) {
@@ -44,6 +44,7 @@ minor.tick <- function (nx = 2, ny = 2, tick.ratio = 0.5) {
 
 Teff_sun = log10(5777)
 solar_age = 4.57e9
+solar_radius <- 6.955*10**10
 font <- "Palatino"
 approx_xout <- seq(0, 1, .04)
 color_offset <- 6
@@ -54,15 +55,15 @@ layout_width <- c(.425,.425,.15)
 make_legend <- function(labls, ev_stage, position='left', lty=TRUE) {
     par(mar=rep(0,4))
     plot.new()
-    cls <- if(ev_stage=="solar-like") c(cl, "black") else cl
-    lgnd <- if(ev_stage=="solar-like") c(labls, "Model S") else labls
+    cls <- if(ev_stage=="solar-age") c(cl, "black") else cl
+    lgnd <- if(ev_stage=="solar-age") c(labls, "Model S") else labls
     if (lty) {
         legend(position, bty='n', inset=0, col=cls, legend=lgnd,
-            lty=if(ev_stage=="solar-like") 
+            lty=if(ev_stage=="solar-age") 
                 c(rep(1, length(labls)), 2) else 1)
     } else {
         legend(position, bty='n', inset=0, col=cls, legend=lgnd,
-            pch=if(ev_stage=="solar-like") 
+            pch=if(ev_stage=="solar-age") 
                 c(rep(20, length(labls)), 1) else 20)
     }
 }
@@ -72,13 +73,15 @@ start_dev <- function(maintext, plot_name, experiment, ev_stage,
     cairo_pdf(file.path(plot_subdir, 
         paste0(plot_name, '_', basename(experiment), '_', ev_stage, '.pdf')),
               width=plot_width, height=plot_height, family=font)
-    layout(matrix(c(1,1,1,2,3,4,5,6,4), ncol=3, byrow=TRUE), 
-           heights=c(0.14,0.43,0.43), widths=width)
-    par(mar=rep(0,4))
-    plot.new()
-    text(0.5, 0.5, 
-         paste(maintext, sub("_", " ", ev_stage),"stars\nby",experiment_name),
-         cex=2, font=2)
+    #layout(matrix(c(1,1,1,2,3,4,5,6,4), ncol=3, byrow=TRUE), 
+    #       heights=c(0.14,0.43,0.43), widths=width)
+    layout(matrix(c(1,2,3,4,5,3), ncol=3, byrow=TRUE), 
+           heights=c(0.5,0.5), widths=width)
+    #par(mar=rep(0,4))
+    #plot.new()
+    #text(0.5, 0.5, 
+    #     paste(maintext, sub("_", " ", ev_stage),"stars\nby",experiment_name),
+    #     cex=2, font=2)
 }
 
 load_experiment_info <- function(experiment, simulations) {
