@@ -73,15 +73,15 @@ start_dev <- function(maintext, plot_name, experiment, ev_stage,
     cairo_pdf(file.path(plot_subdir, 
         paste0(plot_name, '_', basename(experiment), '_', ev_stage, '.pdf')),
               width=plot_width, height=plot_height, family=font)
-    #layout(matrix(c(1,1,1,2,3,4,5,6,4), ncol=3, byrow=TRUE), 
-    #       heights=c(0.14,0.43,0.43), widths=width)
-    layout(matrix(c(1,2,3,4,5,3), ncol=3, byrow=TRUE), 
-           heights=c(0.5,0.5), widths=width)
-    #par(mar=rep(0,4))
-    #plot.new()
-    #text(0.5, 0.5, 
-    #     paste(maintext, sub("_", " ", ev_stage),"stars\nby",experiment_name),
-    #     cex=2, font=2)
+    layout(matrix(c(1,1,1,2,3,4,5,6,4), ncol=3, byrow=TRUE), 
+           heights=c(0.14,0.43,0.43), widths=width)
+    #layout(matrix(c(1,2,3,4,5,3), ncol=3, byrow=TRUE), 
+    #       heights=c(0.5,0.5), widths=width)
+    par(mar=rep(0,4))
+    plot.new()
+    text(0.5, 0.5, 
+         paste(maintext, sub("_", " ", ev_stage), "stars\nby", experiment_name),
+         cex=2, font=2)
 }
 
 load_experiment_info <- function(experiment, simulations) {
