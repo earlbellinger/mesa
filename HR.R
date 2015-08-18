@@ -13,6 +13,8 @@ dir.create(plot_dir, showWarnings=FALSE)
 fgong_dir <- file.path('fgongs')
 dir.create(fgong_dir, showWarnings=FALSE)
 
+modelS <- read.table('modelS.dat', header=TRUE) 
+
 for (experiment in list.dirs(experiments, recursive=FALSE)) {
     simulations <- list.dirs(experiment, recursive=FALSE)
     simulations <- simulations[order(as.numeric(basename(simulations)))]
@@ -22,9 +24,6 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
     ### Find profile files at different stages of evolution ###
     ###########################################################
     print("Finding profile files")
-    modelS <- read.table('modelS.dat', header=TRUE) 
-    saved_pro_file <- file.path(experiments, 
-        paste0(".", basename(experiment), "_pro_files"))
     pro_files <- list()
     for (simulation in simulations) {
         files <- list.files(file.path(simulation, "LOGS"))
@@ -54,7 +53,8 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
             log_Teff <- data$log_Teff[-1:-start]
             HR <- log_L ~ log_Teff
             if (sim_i == 1) {
-                par(bty="l", las=1, mar=c(3, 3.2, 3, 1), mgp=c(1.8, 0.25, 0))
+                par(bty="l", las=1, mar=c(3, 3.2, 3, 1), cex.lab=1.3, 
+                    mgp=c(1.8, 0.25, 0))
                 plot(HR, type='l', col=cl[sim_i], 
                      xlab=expression(log~T[eff]), 
                      ylab=expression(log~L/L["⊙"]), 
@@ -63,8 +63,7 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                      xlim=rev(round(range(log_Teff)+c(0,0.05), 1)),
                      ylim=round(range(log_L)*2+c(0,0.5), 0)/2,
                      xaxs='i', yaxs='i', tck=0.01)
-                #minor.tick(nx=5, ny=5, tick.ratio=-0.25)
-                magaxis(side=1:4, labels=FALSE)
+                magaxis(side=1:4, tcl=0.25, labels=FALSE)
             } else {
                 lines(HR, col=cl[sim_i])
             }
@@ -173,7 +172,7 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                         n=length(approx_xout), xout=approx_xout, rule=2)$y
                     if (sim_i == 1) {
                         par(bty="l", las=1, cex.lab=1.3,
-                            mar=c(3, 3.2, 1, 1), mgp=c(1.8, 0.25, 0))
+                            mar=c(3, 3.5, 1, 1), mgp=c(1.8, 0.25, 0))
                         plot(data$radius, y, type='l', col=cl[sim_i],
                              xlim=c(0, x_max),
                              ylim=c(y_min, y_max),#+0.01*y_max), 
@@ -181,8 +180,7 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                              xlab="",
                              ylab=ylabel)
                         title(xlab=expression(fractional~radius~r/R["⊙"]))
-                        #minor.tick(nx=5, ny=5, tick.ratio=-0.15)
-                        magaxis(side=1:2, unlog='y', family=font,
+                        magaxis(side=1:2, unlog='y', family=font, tcl=0.25,
                             mgp=c(1.8, 0.25, 0),
                             labels=c(FALSE, TRUE))
                     } else {
@@ -206,27 +204,20 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
             row_offset <- round(nrow(rel_diff) * 0.5, 0)
             rd <- function(x) diff(range(x))
             core_var <- apply(rel_diff[1:(row_offset-1),],1,rd)
-            #print(core_var)
-            #print(nrow(rel_diff))
             row_max <- if (any(core_var > 1)) {
                 min(which(core_var>0.1))
             } else {
                 outer_var <- apply(rel_diff[row_offset:nrow(rel_diff),],1,rd)
                 endpts <- outer_var > max(core_var) & outer_var > 0.01 | 
                           outer_var > 1
-                #max(which(endpts))+row_offset-1
                 ifelse(any(endpts), min(which(endpts))+row_offset-1, 
                        nrow(rel_diff))
-                #ifelse(any(endpts), min(which(endpts))+row_offset, 
-                #    nrow(rel_diff))
             }
             if (row_max <= 1 || row_max >= nrow(rel_diff)) 
                 row_max <- nrow(rel_diff)
             x_max <- max(approx_xout[1:row_max])
             for (sim_i in 1:ncol(rel_diff)) {
                 if (sim_i == 1) {
-                    #layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
-                    #       heights=c(0.1,0.9), widths=layout_width)
                     par(bty='l', las=1, xpd=TRUE, cex.lab=1.3,
                         mar=c(3, 5, 1, 1), mgp=c(2.5, 0.25, 0))
                     plot(approx_xout[1:row_max], rel_diff[1:row_max, sim_i], 
@@ -235,8 +226,8 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                          tck=0.01,
                          xlim=c(0, x_max),
                          ylim=range(rel_diff[1:row_max,]),
-                         ylab=bquote("relative"~.(tolower(main_label))~
-                             "difference"~delta * .(symbol) / .(symbol)),
+                         ylab=bquote("rel."~.(tolower(main_label))~
+                             "diff."~delta * .(symbol) / .(symbol)),
                          xlab="")
                     title(xlab=expression("fractional radius"~r/R["⊙"]), 
                           mgp=par()$mgp-c(0.5,0,0))
@@ -260,41 +251,16 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
         cairo_pdf(file.path(plot_subdir, paste0("lamb", '_', 
             basename(experiment), '_', ev_stage, '.pdf')),
             width=plot_width, height=plot_height, family=font)
-        #layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
-        #       heights=c(0.14,0.86), widths=c(.85, .15))
-        #par(mar=rep(0,4))
-        #plot.new()
-        #text(0.5, 0.5, paste("Critical frequencies of", ev_stage, 
-        #     "stars\nby", experiment_name), cex=2, font=2)
-        #par(bty="l", las=1, mar=c(3, 3.4, 2, 0.1), 
-        #    mgp=c(2, 0.25, 0))
-        
         main_label <- "Frequency"
-        #symbol <- bquote(omega)
         ylabel <- expression(frequency~nu~"["*mu*Hz*"]")
-        
-        #modelS_s <- modelS[["csound"]]**2/(modelS[["radius"]]*solar_radius)**2
-        #modelS_r <- modelS[["radius"]][is.finite(modelS_s)]
-        #modelS_s <- modelS_s[is.finite(modelS_s)]
-        #modelS_s1 <- log10(sqrt(1*(1+1)*modelS_s))
-        #modelS_s2 <- log10(sqrt(2*(2+1)*modelS_s))
-        #modelS_s3 <- log10(sqrt(3*(3+1)*modelS_s))
-        
-        #y_min <- ifelse(ev_stage=="solar-age", min(modelS_s1), Inf)
         y_min <- Inf
         y_max <- -Inf
-        #y_max <- ifelse(ev_stage=="solar-age", max(modelS_s3), -Inf)
         x_max <- 1
         for (simulation in simulations) {
             sim_no <- grep(simulation, pro_files[[ev_stage]])
             data_file <- file.path(pro_files[[ev_stage]][sim_no])
             if (file.exists(data_file)) {
                 data <- read.table(data_file, header=TRUE, skip=5)
-                #brunt_N2 <- data[["brunt_N2"]]
-                #y <- log10(sqrt(brunt_N2[brunt_N2 > 0]))
-                #print(c(data_file, max(y)))
-                #if (min(y) < y_min) y_min <- min(y)
-                #if (max(y) > y_max) y_max <- max(y)
                 y <- data[["csound"]]**2 /
                     (data[["radius"]]*solar_radius)**2
                 y <- y[is.finite(y)]
@@ -306,7 +272,6 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                     x_max <- round(max(data$radius)+.05, 1)
             }
         }
-        #print(c(y_min, y_max))
         sim_i <- 0
         for (simulation in simulations) {
             sim_no <- grep(simulation, pro_files[[ev_stage]])
@@ -319,7 +284,8 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                 indices <-  stable[which(diff(stable)!=1)[1]+1] : max(stable)
                 y <- log10(10**6/(2*pi) * sqrt(brunt_N2[indices]))
                 if (sim_i == 1) {
-                    par(las=1, mar=c(3, 3.2, 3, 1), mgp=c(1.8, 0.25, 0))
+                    par(las=1, mar=c(3, 3.2, 3, 1), cex.lab=1.3, 
+                        mgp=c(1.8, 0.25, 0))
                     plot(data$radius[indices], y, type='l', cex=0.25,
                          col=cl[sim_i],
                          xlim=c(0, x_max),
@@ -329,7 +295,7 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                          main=paste("Critical frequencies of", ev_stage, 
                                     "stars\nby", experiment_name))
                     title(xlab=expression(r/R["⊙"]))
-                    magaxis(side=1:4, unlog='y', family=font,
+                    magaxis(side=1:4, unlog='y', family=font, tcl=0.25,
                             mgp=c(1.8, 0.25, 0),
                             labels=c(FALSE, TRUE, FALSE, FALSE))
                 } else {
@@ -344,13 +310,6 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                 }
             }
         }
-        #if (ev_stage=="solar-age") {## plot Model S
-        #    lines(modelS_r, modelS_s1, col='black', lty=2)
-        #    lines(modelS_r, modelS_s2, col='black', lty=3)
-        #    lines(modelS_r, modelS_s3, col='black', lty=4)
-        #}
-        #par(mar=rep(0,4))
-        #plot.new()
         legend("topleft", bty='n', inset=0,
                lty=1:4, legend=c("Brunt-Väisälä", 
                         expression("Lamb"~S[1]),
