@@ -95,7 +95,7 @@ for (cyg in c('16 Cyg A', '16 Cyg B')) {
                  ylab=bquote("frequency"~nu~"["*mu*Hz*"]"))
             title(xlab=expression(nu~mod~Delta*nu), 
                   mgp=par()$mgp-c(0.4,0,0))
-            magaxis(side=1:4, labels=FALSE)
+            magaxis(side=1:4, tcl=0.25, labels=FALSE)
             #abline(v=coef(all_fit)[2], lty=1, lwd=0.5)
             legend(3, par("usr")[4], bty='n', inset=0, 
                    pch=c(0:3, rep(NA, 6)), 
@@ -112,7 +112,7 @@ for (cyg in c('16 Cyg A', '16 Cyg B')) {
                             expression(Delta*nu["\u2113"==2]),
                             expression(Delta*nu["\u2113"==3])))
         } else {
-            points(relation, col=cl[l_mode+1], pch=l_mode+3, 
+            points(relation, col=cl[l_mode+1], pch=l_mode, 
                    cex=50*gaussian_env/ell$dnu)
         }
         #points(ell$nu ~ ell$nu%%coef(all_fit)[2], 
@@ -171,7 +171,7 @@ for (cyg in c('16 Cyg A', '16 Cyg B')) {
              nu["\u2113,"*n]-Delta*nu["0,"*n]~"["*mu*Hz*"]"))
     title(xlab=expression("radial order"~n), 
           mgp=par()$mgp-c(0.4,0,0))
-    magaxis(side=1:4, labels=FALSE)
+    magaxis(side=1:4, tcl=0.25, labels=FALSE)
     for (l_mode in 0:3) {
         ell <- df[df$l==l_mode,]
         w <- dnorm(ell$nu_orig, nu_max, converted_fwhm)/ell$dnu
@@ -184,13 +184,13 @@ for (cyg in c('16 Cyg A', '16 Cyg B')) {
     }
     print(c(cl, rep(0, 4)))
     legend("center", bty='n', inset=0, ncol=2, 
-           pch=c(0:3, rep(NA, 4)), 
-           col=c(cl, rep("black", 4)), 
+           pch=c(3:0, rep(NA, 4)), 
+           col=c(rev(cl), rep("black", 4)), 
            lty=c(rep(0, 5), 2, 3, 0),
-           legend=c(expression("\u2113" == 0),
-                    expression("\u2113" == 1),
+           legend=c(expression("\u2113" == 3),
                     expression("\u2113" == 2),
-                    expression("\u2113" == 3),
+                    expression("\u2113" == 1),
+                    expression("\u2113" == 0),
                     "", 
                     "weighted mean", 
                     "95% confidence interval",
