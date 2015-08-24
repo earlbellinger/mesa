@@ -16,11 +16,11 @@ dir.create(plot_dir, showWarnings=FALSE)
 cl <- brewer.pal(4, "BrBG")
 
 solar_radius <- 6.955*10**10
-modelS <- read.table('modelS.dat', header=TRUE) 
+modelS <- read.table(file.path('data', 'modelS.dat'), header=TRUE) 
 modelS <- modelS[modelS$radius > 0,]
 attach(modelS)
 
-modelS_freqs <- read.table('fgong.l5bi.d.dat')
+modelS_freqs <- read.table(file.path('data', 'fgong.l5bi.d.dat'))
 modelS_freqs <- data.frame(l=modelS_freqs[,1], n=modelS_freqs[,2], 
     nu=modelS_freqs[,3])
 attach(modelS_freqs)
