@@ -76,8 +76,8 @@ echo "
  2  '$fname-6202'   @
  9  '0'   @
  11 '$fname.agsm'   @
- 4  
- 15 '$fname.ssm'   @
+ 4  '$fname.amde'   @
+ 15 '$fname.ssm'    @
  -1 ''   @
   cntrd,
 mod.osc.cst.int.out.dgn     @
@@ -116,7 +116,7 @@ out:
   irotkr,nprtkr,igm1kr,npgmkr,ispcpr,
   0,,0,,0,,,,,,,     @
   icaswn, sigwn1, sigwn2, frqwn1, frqwn2,iorwn1, iorwn2, frlwn1, frlwn2
-        ,     0,      -1,      0,  10000,  -200,     50,      0,     -1,   @
+        ,      0,     -1,      0,  10000,  -200,     50,      0,     -1,   @
 dgn:
   itssol,idgtss,moddet,iprdet,npout
   0,0,0,0,,,,,,,,,,,     @
