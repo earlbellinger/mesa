@@ -16,7 +16,7 @@ cl <- brewer.pal(4, "BrBG")#rainbow(4)[1:4]
 
 for (cyg in c('16 Cyg A', '16 Cyg B')) {
     spaceless <- gsub(' ', '', cyg)
-    data <- read.table(paste0(spaceless, '.dat'), header=TRUE)
+    data <- read.table(file.path('data', paste0(spaceless,'.dat')), header=TRUE)
     
     delta_nu <- ifelse(cyg=='16 Cyg A', 103.4, 116.97) # Lund et al 2014
     nu_max <- ifelse(cyg=='16 Cyg A', 2101, 2552) # Detection of l=4 and l=5...
