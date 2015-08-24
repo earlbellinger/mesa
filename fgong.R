@@ -14,7 +14,7 @@ fgong_dir <- file.path('fgongs')
 plot_dir <- file.path('plots')
 dir.create(plot_dir, showWarnings=FALSE)
 
-modelS <- read.table('fgong.l5bi.d.dat')
+modelS <- read.table(file.path('data', 'fgong.l5bi.d.dat'))
 
 widths <- c(.44, .44, .12)
 
@@ -47,11 +47,14 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             paste0('echelle_', basename(experiment), '_', ev_stage, '.pdf')), 
             width=plot_width, height=plot_height, family=font)
         
-        start_dev("Frequency differences in", "freqdiffs", 
+        start_dev("Frequency differences in", "freq-diff", 
             basename(experiment), ev_stage, width=widths)
-        start_dev("Frequencies of", "freqs", basename(experiment), ev_stage,
+        start_dev("Frequencies of", "freq", basename(experiment), ev_stage,
             widths)
         
+        cache <- list()
+        p_cache <- list()
+        scaler <- list()
         y_min <- Inf
         y_max <- -Inf
         x_max <- -Inf
@@ -59,25 +62,35 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
         max_delta_nu <- -Inf
         nu_min <- Inf
         for (model_i in data_files) {
-            seismo_row <- which(seismology$name == 
-                    as.numeric(sub('.dat', '', files[model_i])))
-            delta_nu <- seismology$delta_nu[seismo_row] 
+            exp_value <- as.numeric(sub('.dat', '', files[model_i]))
+            M <- if (basename(experiment) == 'M') exp_value else 1
+            M <- M * solar_mass
+            seismo_row <- which(seismology$name == exp_value)
+            R <- seismology$radius[seismo_row] * solar_radius
+            scaler[[model_i]] <- solar_scale / sqrt(M/R^3)
+            
+            delta_nu <- seismology$delta_nu[seismo_row] * scaler[[model_i]]
             if (delta_nu > max_delta_nu) max_delta_nu <- delta_nu
             
-            nu_max <- seismology$nu_max[seismo_row] 
-            cutoff_freq <- seismology$acoustic_cutoff[seismo_row] 
+            nu_max <- seismology$nu_max[seismo_row] * scaler[[model_i]]
+            cutoff_freq <- seismology$acoustic_cutoff[seismo_row] * 
+                scaler[[model_i]]
             
             data <- read.table(file.path(ev_stage_dir, files[model_i]))
             data <- data[data[,3] < cutoff_freq,]
+            data[,3] <- data[,3] * scaler[[model_i]]
+            
+            cache[[model_i]] <- data
+            
             if (nrow(data)==0) next
             if (min(data[,3]) < y_min) y_min <- min(data[,3])
             if (max(data[,3]) > y_max) y_max <- max(data[,3])
             if (max(data[,2]) > x_max) x_max <- max(data[,2])
             if (min(data[,2]) < x_min) x_min <- min(data[,2])
             
-            nu <- data[(data[,3]<cutoff_freq) & (data[,2]>=0)
-                     & (data[,3]>(nu_max-5*delta_nu)),]
+            nu <- data[data[,2]>=0 & data[,3]>(nu_max-5*delta_nu),]
             if (min(nu[,3]) < nu_min) nu_min <- min(nu[,3])
+            p_cache[[model_i]] <- nu
         }
         
         delta_nus <- list()
@@ -94,13 +107,8 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             ############################
             counter <- 1
             for (model_i in data_files) {
-                seismo_row <- which(seismology$name == 
-                    as.numeric(sub('.dat', '', files[model_i])))
-                cutoff_freq <- seismology$acoustic_cutoff[seismo_row]
-                
-                data <- read.table(file.path(ev_stage_dir, files[model_i]))
+                data <- cache[[model_i]]
                 ell <- data[data[,1]==l_mode,]
-                ell <- ell[ell[,3]<cutoff_freq,]
                 ell <- ell[!duplicated(ell[,2]),]
                 
                 if (!grepl('solar-age', ev_stage) && counter == sun_num)
@@ -145,13 +153,13 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                             ncol=length(simulations))
             n_counter <- 1
             for (model_i in data_files) {
-                seismo_row <- which(seismology$name == 
-                    as.numeric(sub('.dat', '', files[model_i])))
-                cutoff_freq <- seismology$acoustic_cutoff[seismo_row]
-                
-                data <- read.table(file.path(ev_stage_dir, files[model_i]))
+                #seismo_row <- which(seismology$name == 
+                #    as.numeric(sub('.dat', '', files[model_i])))
+                #cutoff_freq <- seismology$acoustic_cutoff[seismo_row]
+                #data <- read.table(file.path(ev_stage_dir, files[model_i]))
+                data <- cache[[model_i]]
                 ell <- data[data[,1]==l_mode,]
-                ell <- ell[ell[,3]<cutoff_freq,]
+                ell <- ell[!duplicated(ell[,2]),]
                 
                 x_counter <- 1
                 for (x in n_range) {
@@ -206,18 +214,18 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             ##########################
             counter <- 1
             for (model_i in data_files) {
-                seismo_row <- which(seismology$name == 
-                    as.numeric(sub('.dat', '', files[model_i]))) 
-                delta_nu <- seismology$delta_nu[seismo_row] 
-                nu_max <- seismology$nu_max[seismo_row] 
-                cutoff_freq <- seismology$acoustic_cutoff[seismo_row] 
+                #seismo_row <- which(seismology$name == 
+                #    as.numeric(sub('.dat', '', files[model_i]))) 
+                #delta_nu <- seismology$delta_nu[seismo_row] * scaler[[model_i]]
+                #nu_max <- seismology$nu_max[seismo_row] * scaler[[model_i]]
+                #cutoff_freq <- seismology$acoustic_cutoff[seismo_row] 
                 
-                data <- read.table(file.path(ev_stage_dir, files[model_i]))
+                #data <- read.table(file.path(ev_stage_dir, files[model_i]))
+                data <- p_cache[[model_i]]
                 ell <- data[data[,1]==l_mode,]
-                ell <- ell[(ell[,3]<cutoff_freq) & (ell[,2]>=0)
-                         & (ell[,3]>(nu_max-5*delta_nu)),]
+                #ell <- ell[(ell[,2]>=0) & (ell[,3]>(nu_max-5*delta_nu)),]
                 ell <- ell[!duplicated(ell[,2]),]
-                #delta_nu <- median(diff(ell[,3]))
+                
                 converted_fwhm <- (0.66*nu_max**0.88)/(2*sqrt(2*log(2)))
                 gaussian_env <- dnorm(ell[,3], nu_max, converted_fwhm)
                 fit <- lm(ell[,3] ~ ell[,2], weights=gaussian_env)
@@ -229,10 +237,10 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                 
                 ### estimate std errors
                 out <- rep(0, 100)
-                d <- if (l_mode == 0) 0.91
-                else if (l_mode == 1) 0.61
-                else if (l_mode == 2) 0.87
-                else if (l_mode == 3) 1.4
+                d <- if (l_mode == 0) 0.07
+                else if (l_mode == 1) 0.08
+                else if (l_mode == 2) 0.17
+                else if (l_mode == 3) 0.38
                 for (ii in 1:100) {
                     new_fit <- lm(ell[,3] + rnorm(nrow(ell), 0, d) ~ ell[,2], 
                         weights=gaussian_env)
@@ -271,7 +279,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             if (l_mode==3) {
                 par(mar=rep(0,4))
                 plot.new()
-                legend(-0.1, 0.9, bty='n', inset=0, col=cl, pch=20, 
+                legend(-0.1, 0.9, bty='n', inset=0, col=lgnd_cl, pch=20, 
                        legend=labls)
                 legend(0.1, 0.45, bty='n', inset=0, pch=0:3, 
                        legend=c(expression("\u2113"==0), 
@@ -295,15 +303,17 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             n_min <- Inf
             n_max <- -Inf
             for (model_i in data_files) {
-                seismo_row <- which(seismology$name == 
-                    as.numeric(sub('.dat', '', files[model_i])))
-                delta_nu <- seismology$delta_nu[seismo_row] 
-                nu_max <- seismology$nu_max[seismo_row] 
-                cutoff_freq <- seismology$acoustic_cutoff[seismo_row] 
-                data <- read.table(file.path(ev_stage_dir, files[model_i]))
+                #seismo_row <- which(seismology$name == 
+                #    as.numeric(sub('.dat', '', files[model_i])))
+                #delta_nu <- seismology$delta_nu[seismo_row] 
+                #nu_max <- seismology$nu_max[seismo_row] * scaler[[model_i]]
+                #cutoff_freq <- seismology$acoustic_cutoff[seismo_row]
+                #     * scaler[[model_i]] 
+                
+                #data <- read.table(file.path(ev_stage_dir, files[model_i]))
+                data <- p_cache[[model_i]]
                 ell <- data[data[,1]==l_mode & data[,2]>0,]
-                ell <- ell[(ell[,3]<cutoff_freq) & (ell[,2]>=0)
-                         & (ell[,3]>(nu_max-5*delta_nu)),]
+                #ell <- ell[(ell[,2]>=0) & (ell[,3]>(nu_max-5*delta_nu)),]
                 ell <- ell[!duplicated(ell[,2]),]
                 log_dnus <- log(diff(ell[,3]))
                 ns <- head(ell[,2], -1)
@@ -330,13 +340,15 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             for (model_i in data_files) {
                 seismo_row <- which(seismology$name == 
                     as.numeric(sub('.dat', '', files[model_i])))
-                delta_nu <- seismology$delta_nu[seismo_row] 
-                nu_max <- seismology$nu_max[seismo_row] 
-                cutoff_freq <- seismology$acoustic_cutoff[seismo_row] 
-                data <- read.table(file.path(ev_stage_dir, files[model_i]))
+                #delta_nu <- seismology$delta_nu[seismo_row] 
+                #nu_max <- seismology$nu_max[seismo_row] * scaler[[model_i]]
+                #cutoff_freq <- seismology$acoustic_cutoff[seismo_row] 
+                #    * scaler[[model_i]]
+                
+                #data <- read.table(file.path(ev_stage_dir, files[model_i]))
+                data <- p_cache[[model_i]]
                 ell <- data[data[,1]==l_mode & data[,2]>0,]
-                ell <- ell[(ell[,3]<cutoff_freq) & (ell[,2]>=0)
-                         & (ell[,3]>(nu_max-5*delta_nu)),]
+                #ell <- ell[(ell[,2]>=0) & (ell[,3]>(nu_max-5*delta_nu)),]
                 ell <- ell[!duplicated(ell[,2]),]
                 print (all(diff(ell[,2]) == 1))
                 log_dnus <- log(diff(ell[,3]))
@@ -385,7 +397,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
         ### Make plots of exp vs dnu ###
         ################################
         cairo_pdf(file.path(plot_dir, ev_stage, 
-            paste0('ell_', basename(experiment), '_', ev_stage, '.pdf')), 
+            paste0('dnu_', basename(experiment), '_', ev_stage, '.pdf')), 
             width=plot_width, height=plot_height, family=font)
         layout(matrix(c(1,2), ncol=1, byrow=TRUE), heights=c(0.14,0.86))
         par(mar=rep(0,4))
@@ -420,7 +432,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
         ### Make plots of exp vs dnu diff ###
         #####################################
         cairo_pdf(file.path(plot_dir, ev_stage, 
-            paste0('elldiff_', basename(experiment), '_', ev_stage, '.pdf')), 
+            paste0('dnu-diff_', basename(experiment), '_', ev_stage, '.pdf')), 
             width=plot_width, height=plot_height, family=font)
         layout(matrix(c(1,2), ncol=1, byrow=TRUE), heights=c(0.14,0.86))
         par(mar=rep(0,4))
