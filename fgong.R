@@ -16,8 +16,10 @@ dir.create(plot_dir, showWarnings=FALSE)
 
 modelS <- read.table(file.path('data', 'fgong.l5bi.d.dat'))
 
-widths <- c(.44, .44, .12)
-picker <- c(TRUE, FALSE, FALSE)
+#widths <- c(.44, .44, .12)
+picker <- c(TRUE)#, FALSE, FALSE)
+n_samples <- 10
+col_names <- c('l', 'n', 'nu')
 
 for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
     for (ev_stage_dir in list.dirs(experiment, recursive=FALSE)) {
@@ -51,13 +53,14 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             width=plot_width, height=plot_height, family=font)
         
         start_dev("Frequency differences in", "angdiff", 
-            basename(experiment), ev_stage, width=widths)
-        start_dev("Frequencies of", "freq", basename(experiment), ev_stage,
-            widths)
+            basename(experiment), ev_stage)#, width=widths)
+        start_dev("Frequencies of", "freq", basename(experiment), ev_stage)#,
+            #widths)
         
         cache <- list()
         p_cache <- list()
         scaler <- list()
+        nu_maxs <- list()
         #y_min <- Inf
         y_max <- -Inf
         x_max <- -Inf
@@ -79,10 +82,25 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             nu_max <- seismology$nu_max[seismo_row] * scaler[[model_i]]
             cutoff_freq <- seismology$acoustic_cutoff[seismo_row] * 
                 scaler[[model_i]]
+            nu_maxs[[model_i]] <- nu_max
             
-            data <- read.table(file.path(ev_stage_dir, files[model_i]))
+            data <- read.table(file.path(ev_stage_dir, files[model_i]),
+                col.names=col_names)
             data <- data[data[,3] < cutoff_freq,]
             data[,3] <- data[,3] * scaler[[model_i]]
+            
+            ## There is a bug in ADIPLS that causes l=1 frequencies to sometimes
+            ## duplicate. The workaround is to shift all n at the duplicate
+            ## down by one and remove the n=0.
+            ell <- data[data[,1]==1,]
+            ns <- ell[,2][ell[,2]>0]
+            if (any(duplicated(ns))) {
+                dup <- which(duplicated(ns))[1]
+                toshift <- ns[which(ns>0) < dup]
+                ell[,2][ell[,2]>0][toshift] <- ns[toshift] - 1
+                data[data[,1]==1,] <- ell
+                data <- data[!(data[,1]==1 & data[,2]==0),]
+            }
             
             cache[[model_i]] <- data
             
@@ -92,7 +110,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             if (max(data[,2]) > x_max) x_max <- max(data[,2])
             if (min(data[,2]) < x_min) x_min <- min(data[,2])
             
-            p_nu <- data[data[,2]>=0 & data[,3]>(nu_max-5*delta_nu),]
+            p_nu <- data[data[,2]>0,] #& data[,3]>(nu_max-5*delta_nu),]
             if (min(p_nu[,3]) < p_nu_min) p_nu_min <- min(p_nu[,3])
             if (max(p_nu[,3]) > p_nu_max) p_nu_max <- max(p_nu[,3])
             p_cache[[model_i]] <- p_nu
@@ -129,8 +147,8 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                          tck=0.01, 
                          xlab='',
                          ylab=bquote(.(l_name)~"frequency"~nu~"["*mu*Hz*"]"))
-                    title(xlab=expression("radial order"~n), 
-                          mgp=par()$mgp-mgp_xoff)
+                    title(xlab=expression("radial order"~n))#, 
+                          #mgp=par()$mgp-mgp_xoff)
                     minor.tick(nx=5, ny=5, tick.ratio=-0.15)
                 } else {
                     points(relation, pch=20, cex=0.01, 
@@ -190,8 +208,8 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                                                  omega["\u2113"==.(l_mode)]}))
                              else bquote({delta * omega["\u2113"==.(l_mode)] /
                                                   omega["\u2113"==.(l_mode)]}))
-                    title(xlab=expression("radial order"~n), 
-                          mgp=par()$mgp-mgp_xoff)
+                    title(xlab=expression("radial order"~n))#, 
+                          #mgp=par()$mgp-mgp_xoff)
                     minor.tick(nx=5, ny=5, tick.ratio=-0.15)
                 } else {
                     points(n_range,
@@ -215,7 +233,8 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             for (model_i in data_files) {
                 data <- p_cache[[model_i]]
                 ell <- data[data[,1]==l_mode,]
-                ell <- ell[!duplicated(ell[,2]),]
+                #ell <- ell[!duplicated(ell[,2]),]
+                nu_max <- nu_maxs[[model_i]]
                 
                 converted_fwhm <- (0.66*nu_max**0.88)/(2*sqrt(2*log(2)))
                 gaussian_env <- dnorm(ell[,3], nu_max, converted_fwhm)
@@ -227,12 +246,12 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                     summary(fit)$coefficients[2,2])
                 
                 ### estimate std errors
-                out <- rep(0, 100)
+                out <- rep(0, n_samples)
                 d <- if (l_mode == 0) 0.07
                 else if (l_mode == 1) 0.08
                 else if (l_mode == 2) 0.17
                 else if (l_mode == 3) 0.38
-                for (ii in 1:100) {
+                for (ii in 1:n_samples) {
                     new_fit <- lm(ell[,3] + rnorm(nrow(ell), 0, d) ~ ell[,2], 
                         weights=gaussian_env)
                     out[ii] <- summary(new_fit)$coefficients[2,2]
@@ -255,8 +274,8 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                          xlim=c(0, round(max_delta_nu+5, -1)),
                          xlab="", xaxs='i', yaxs='i', tck=0.01, 
                          ylab=bquote("frequency"~nu~"["*mu*Hz*"]"))
-                    title(xlab=expression(nu~mod~Delta*nu), 
-                          mgp=par()$mgp-mgp_xoff)
+                    title(xlab=expression(nu~mod~Delta*nu))#, 
+                          #mgp=par()$mgp-mgp_xoff)
                     magaxis(side=1:4, tcl=0.25, labels=FALSE)
                     #minor.tick(nx=5, ny=5, tick.ratio=-0.15)
                 } else {
@@ -297,22 +316,29 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             
             n_min <- Inf
             n_max <- Inf
+            ii <- 1
             for (model_i in data_files) {
                 data <- p_cache[[model_i]]
                 ell <- data[data[,1]==l_mode & data[,2]>0,]
-                ell <- ell[!duplicated(ell[,2]),]
+                #ell <- ell[!duplicated(ell[,2]),]
+                ell <- ell[ell[,3]>(nu_maxs[[model_i]] - 
+                           5*delta_nus[[toString(l_mode)]][ii]),]
                 ns <- head(ell[,2], -1)
                 if (max(ns) < n_max) n_max <- max(ns)
                 if (min(ns) < n_max) n_min <- min(ns)
                 ns_cache[[model_i]] <- ns
+                ii <- ii + 1
             }
             
             grad_min <- Inf
             grad_max <- -Inf
+            ii <- 1
             for (model_i in data_files) {
                 data <- p_cache[[model_i]]
                 ell <- data[data[,1]==l_mode & data[,2]>0,]
-                ell <- ell[!duplicated(ell[,2]),]
+                #ell <- ell[!duplicated(ell[,2]),]
+                ell <- ell[ell[,3]>(nu_maxs[[model_i]] - 
+                           5*delta_nus[[toString(l_mode)]][ii]),]
                 log_dnus <- log(diff(ell[,3]))
                 ns <- head(ell[,2], -1)
                 new_ns <- seq(max(n_min, min(ns)), min(n_max, max(ns)), 0.01)
@@ -322,12 +348,13 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                 log_dnus_cache[[model_i]] <- log_dnus
                 new_ns_cache[[model_i]] <- new_ns
                 alpha_cache[[model_i]] <- alphas
+                ii <- ii + 1
             }
             
             if (grepl('solar-age', ev_stage)) {
                 ell <- modelS[modelS[,1]==l_mode,]
                 ell <- ell[ell[,3]<y_max & ell[,2]>=n_min & ell[,2]<=n_max,]
-                ell <- ell[!duplicated(ell[,2]),]
+                #ell <- ell[!duplicated(ell[,2]),]
                 modelS_log_dnus <- log(diff(ell[,3]))
                 modelS_ns <- head(ell[,2], -1)
                 new_modelS_ns <- seq(n_min, n_max, 0.01)
@@ -351,8 +378,8 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                              =="("*d~log~Delta*nu/dn*")"["\u2113"==0])
                            else 
                              as.expression(bquote("gradient"~alpha[.(l_mode)])))
-                    title(xlab=expression("radial order"~n), 
-                          mgp=par()$mgp-mgp_xoff)
+                    title(xlab=expression("radial order"~n))#, 
+                          #mgp=par()$mgp-mgp_xoff)
                     minor.tick(nx=5, ny=5, tick.ratio=-0.15)
                 } else {
                     lines(relation, col=adjustcolor(cl[counter], 0.3), 
@@ -388,15 +415,18 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
         make_layout(paste("Large separation of", ev_stage,
                     "stars\nby", experiment_name))
         set_par()
-        for (l_mode in 0:3) {
+        max_err <- max(dnu_err[["0"]], dnu_err[["1"]], dnu_err[["2"]])/2
+        for (l_mode in 0:2) {
             l_name <- toString(l_mode)
             relation <- delta_nus[[l_name]] ~ exp_vals
             if (l_mode == 0) {
                 plot(relation, pch=l_mode, main="", xlab="", cex=0.5,
-                     tck=0.01, ylim=range(delta_nus), col=ell_cl[l_mode+1],
+                     tck=0.01, col=ell_cl[l_mode+1],
+                     ylim=range(delta_nus[["0"]], delta_nus[["1"]], 
+                                delta_nus[["2"]]) + c(-max_err, max_err),
                      ylab=expression("large frequency separation"~Delta*nu))
-                title(xlab=bquote(.(experiment_name)~.(freep)), 
-                      mgp=par()$mgp-mgp_xoff)
+                title(xlab=bquote(.(experiment_name)~.(freep)))#, 
+                      #mgp=par()$mgp-mgp_xoff)
                 lines(relation, lty=l_mode+1, col=ell_cl[l_mode+1])
                 magaxis(side=1:4, tcl=0.25, labels=FALSE)
             } else {
@@ -409,8 +439,8 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                  add=TRUE, pch=l_mode, lty=5, cex=0.5,
                  col=ell_cl[l_mode+1], errbar.col=ell_cl[l_mode+1])
         }
-        legend("top", bty='n', inset=0, pch=3:0, lty=4:1, col=rev(ell_cl),
-               legend=c(expression("\u2113"==3), 
+        legend("bottom", bty='n', inset=0, pch=2:0, lty=3:1, col=ell_cl[3:1],
+               legend=c(#expression("\u2113"==3), 
                         expression("\u2113"==2),
                         expression("\u2113"==1),
                         expression("\u2113"==0)))
@@ -427,13 +457,14 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
         set_par()
         diff_max <- -Inf
         diff_min <- Inf
-        for (l_mode in 1:3) {
-            y <- delta_nus[[toString(l_mode)]] - delta_nus[["0"]]
+        for (l_mode in 1:2) {
+            y <- delta_nus[[toString(l_mode)]] - delta_nus[["0"]] + 
+                max(dnu_err[[toString(l_mode)]])/2
             if (max(y) > diff_max) diff_max <- max(y)
             if (min(y) < diff_min) diff_min <- min(y)
         }
         print(c("diff min: ", diff_min))
-        for (l_mode in 1:3) {
+        for (l_mode in 1:2) {
             l_name <- toString(l_mode)
             difference <- delta_nus[[l_name]] - delta_nus[["0"]]
             relation <- difference ~ exp_vals
@@ -441,13 +472,13 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                 plot(relation, pch=l_mode, main="", xlab="", yaxs='i',
                      col=ell_cl[l_mode+1], tck=0.01, cex=0.5,
                      ylim=c(min(0, round(diff_min-0.05, 1)), 
-                            round(diff_max+0.5)),
+                            round(diff_max+0.05, 1)),
                      ylab=expression("large separation diff."
                                      ~delta*Delta*nu["\u2113"]==
                                      Delta*nu["\u2113"]-
                                      Delta*nu[0]))
-                title(xlab=bquote(.(experiment_name)~.(freep)), 
-                      mgp=par()$mgp-mgp_xoff)
+                title(xlab=bquote(.(experiment_name)~.(freep)))#, 
+                      #mgp=par()$mgp-mgp_xoff)
                 lines(relation, lty=l_mode+1, col=ell_cl[l_mode+1])
                 npoints <- length(exp_vals[picker])
                 yerr <- dnu_err[["0"]][i_mid]/2
@@ -465,8 +496,8 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                  add=TRUE, pch=l_mode, lty=5, cex=0.5,
                  col=ell_cl[l_mode+1], errbar.col=ell_cl[l_mode+1])
         }
-        legend("topright", bty='n', inset=0, pch=3:1, lty=4:2, col=ell_cl[4:2],
-            legend=c(expression(delta*Delta*nu[3]), 
+        legend("topleft", bty='n', inset=0, pch=2:1, lty=3:2, col=ell_cl[3:2],
+            legend=c(#expression(delta*Delta*nu[3]), 
                      expression(delta*Delta*nu[2]),
                      expression(delta*Delta*nu[1])))
         dev.off()
