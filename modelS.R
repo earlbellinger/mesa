@@ -10,7 +10,7 @@ library(Bolstad)
 source('utils.R')
 
 plot_dir <- file.path('plots', 'modelS')
-dir.create(plot_dir, showWarnings=FALSE)
+dir.create(plot_dir, showWarnings=FALSE, recursive=TRUE)
 
 #cl <- brewer.pal(3, "Dark2")
 cl <- brewer.pal(4, "BrBG")
@@ -142,3 +142,4 @@ dev.off()
 #           start=list(b0=coefs[1], b1=coefs[2], b2=coefs[3], b3=1, 
 #                      b4=coefs[4]))
 #lines(radius, predict(fit, newdata=data.frame(x=radius)), col='red', lty=2)
+

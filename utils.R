@@ -49,11 +49,11 @@ solar_mass = 1.9891*10**30
 solar_scale = sqrt(solar_mass/solar_radius^3)
 font = "Palatino"
 approx_xout = seq(0, 1, .04)
-color_offset = 6
+color_offset = 10
 plot_width = 6
 plot_height = 6
-layout_width_three = c(.425,.425,.15)
-layout_width_two = c(.85, .15)
+layout_width_three = c(.4,.4,.2)
+layout_width_two = c(.8, .2)
 cex_lab = 1.3
 title_cex = 1.3
 par_mar = c(3.5, 4.5, 0.1, 1)
@@ -147,3 +147,4 @@ Mode <- function(x) {
   ux <- unique(x)
   ux[which.max(tabulate(match(x, ux)))]
 }
+

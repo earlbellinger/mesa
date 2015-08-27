@@ -197,3 +197,4 @@ for (cyg in c('16 Cyg A', '16 Cyg B')) {
                     ""))
     dev.off()
 }
+

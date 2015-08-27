@@ -240,8 +240,8 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                          ylab=bquote("rel."~.(tolower(main_label))~
                              "diff."~delta * .(symbol) / .(symbol)),
                          xlab="")
-                    title(xlab=expression("fractional radius"~r/R), 
-                          mgp=par()$mgp-mgp_xoff)
+                    title(xlab=expression("fractional radius"~r/R))#, 
+                          #mgp=par()$mgp-mgp_xoff)
                     minor.tick(nx=5, ny=5, tick.ratio=-0.15)
                     lines(c(x_max,0), c(0, 0), lty=2)
                 } else {
@@ -302,7 +302,7 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                          ylim=c(y_min, y_max), 
                          xaxs='i', yaxt='n', tck=0, 
                          xlab="", ylab=ylabel, main="")
-                    title(xlab=expression(r/R))
+                    title(xlab=expression("fractional radius"~r/R))
                     magaxis(side=1:4, unlog='y', family=font, tcl=0.25,
                             mgp=par_mgp,
                             labels=c(FALSE, TRUE, FALSE, FALSE))
@@ -318,7 +318,7 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
                 }
             }
         }
-        legend("topleft", bty='n', inset=0,
+        legend("top", bty='n', inset=0,
                lty=1:4, legend=c("Brunt-Väisälä", 
                         expression("Lamb"~S[1]),
                         expression("Lamb"~S[2]),
@@ -328,3 +328,4 @@ for (experiment in list.dirs(experiments, recursive=FALSE)) {
     }
 }
 warnings()
+
