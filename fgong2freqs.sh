@@ -112,7 +112,7 @@ out:
   istdpr,nout,nprcen,irsord,iekinr
   9,50,100,20,0,,,,,,,,     @
   iper,ivarf,kvarf,npvarf,nfmode,
-  1,1,2,0,2,,,,,,,,     @
+  1,1,2,0,3,,,,,,,,     @
   irotkr,nprtkr,igm1kr,npgmkr,ispcpr,
   0,,0,,0,,,,,,,     @
   icaswn, sigwn1, sigwn2, frqwn1, frqwn2,iorwn1, iorwn2, frlwn1, frlwn2

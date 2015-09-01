@@ -67,7 +67,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
         y_max <- -Inf
         x_max <- -Inf
         x_min <- Inf
-        max_delta_nu <- -Inf
+        #max_delta_nu <- -Inf
         p_nu_min <- Inf
         p_nu_max <- -Inf
         for (model_i in data_files) {
@@ -78,8 +78,8 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             R <- seismology$radius[seismo_row] * solar_radius
             scaler[[model_i]] <- solar_scale / sqrt(M/R^3)
             
-            delta_nu <- seismology$delta_nu[seismo_row] * scaler[[model_i]]
-            if (delta_nu > max_delta_nu) max_delta_nu <- delta_nu
+            #delta_nu <- seismology$delta_nu[seismo_row] * scaler[[model_i]]
+            #if (delta_nu > max_delta_nu) max_delta_nu <- delta_nu
             
             nu_max <- seismology$nu_max[seismo_row] * scaler[[model_i]]
             cutoff_freq <- seismology$acoustic_cutoff[seismo_row] * 

@@ -1,0 +1,15 @@
+
+2 'fgong.l5bi.d.amdl'    @    
+3 'fgong.l5bi.d-6202'    @
+-1 ''        @
+nn,icnmsh
+6202,,,  @
+icase,icvzbn,nsmth,ndisc,dlxdsc,dlgrmx,cacvzb
+21   ,      ,     ,200  ,      ,5.    ,      ,@  
+cg,  cx,ca  ,sig1,sig2,lmax,alphsf,adda4,accrm
+1.,0.05,0.05,0.  ,0.  ,   2,      ,0.02 ,0.01,  @
+nout,cn,irsu,unew   
+60,,,,,,,,,  @
+nmodel,kmodel,itsaml,ioldex
+,,,,,,,,,,,  @
+
