@@ -35,16 +35,12 @@ def parse_eig(eig_file, output_dir='', normalize=False,
             os.makedirs(output_dir)
     
     if save_plot:
-        import matplotlib as mpl
-        from matplotlib import pyplot as plt
+        import matplotlib as mpl 
+        from matplotlib import pyplot as plt 
         mpl.rc('font', family='serif') 
-        #mpl.rc('font', family='Palatino') 
         mpl.rc('text', usetex='true') 
-        #mpl.rc('mathtext', fontset='cm')
-        mpl.rc('text', dvipnghack='true')
-        #mpl.rc('font', **{'family':'serif','serif':['Palatino']})
-        #mpl.rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
-        mpl.rcParams.update({'font.size': 18})
+        mpl.rc('text', dvipnghack='true') 
+        mpl.rcParams.update({'font.size': 18}) 
     
     with open(eig_file, 'rb') as ff:
         contents = ff.read()
@@ -99,9 +95,9 @@ def parse_eig(eig_file, output_dir='', normalize=False,
             plt.xlabel("r/R")
             plt.ylabel("Displacement")
             plt.legend(loc='upper center')
-            plt.title('Eigenfunction for $\ell=%d, n=%d$'%(l,n))
-            plt.ylim([min(-0.1, min(y1), min(y2)),
-                      max(1, max(y1), max(y2))])
+            plt.title('Eigenfunctions for the $\ell=%d,\;n=%d$ mode'%(l,n))
+            plt.ylim([min(0, min(y1), min(y2))-0.1,
+                      max(1, max(y1), max(y2))+0.1])
             if normalize:
                 plt.xlim([0, 1.01])
             plt.tight_layout()
