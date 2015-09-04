@@ -130,7 +130,9 @@ load_experiment_info <- function(experiment, simulations) {
     cl <<- heat.colors(length(simulations)+color_offset)[1:length(simulations)]
     cl <<- c(cl[1:(sun_num-1)], "black", cl[(sun_num+1):length(cl)])
     lgnd_cl <<- cl
+    print(basename(simulations))
     exp_vals <<- as.numeric(basename(simulations))
+    print(exp_vals)
     labls <<- sapply(simulations,
         function(x) { as.expression(bquote(.(freep) ~ "=" ~ .(basename(x)))) })
     

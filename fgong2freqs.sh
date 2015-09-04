@@ -23,8 +23,8 @@ if [ ! -e $1 ]; then
 fi
 
 ## Pull out the name of the FGONG file
-fname=$(basename $1)
-fname=${fname%.*}
+fname="$(basename $1)"
+fname="${fname%%.*}-freqs"
 
 ## If the second (OUTPUT) argument doesn't exist, create one from the first
 if [ -z ${2+x} ]; then

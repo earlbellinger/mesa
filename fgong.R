@@ -16,7 +16,7 @@ dir.create(plot_dir, showWarnings=FALSE)
 
 #widths <- c(.44, .44, .12)
 picker <- c(TRUE)#, FALSE, FALSE)
-n_samples <- 100
+n_samples <- 1
 col_names <- c('l', 'n', 'nu')
 
 modelS <- read.table(file.path('data', 'fgong.l5bi.d.dat'), col.names=col_names)
@@ -30,7 +30,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
         dir.create(plot_subdir, showWarnings=FALSE)
         
         files <- list.files(ev_stage_dir)
-        print(files)
+        #print(files)
         data_files <- grep('*dat$', files)
         print(data_files)
         if (!any(data_files)) next
@@ -67,7 +67,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
         y_max <- -Inf
         x_max <- -Inf
         x_min <- Inf
-        #max_delta_nu <- -Inf
+        max_delta_nu <- -Inf
         p_nu_min <- Inf
         p_nu_max <- -Inf
         for (model_i in data_files) {
@@ -76,10 +76,10 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             M <- M * solar_mass
             seismo_row <- which(seismology$name == exp_value)
             R <- seismology$radius[seismo_row] * solar_radius
-            scaler[[model_i]] <- solar_scale / sqrt(M/R^3)
+            scaler[[model_i]] <- 1#solar_scale / sqrt(M/R^3)
             
-            #delta_nu <- seismology$delta_nu[seismo_row] * scaler[[model_i]]
-            #if (delta_nu > max_delta_nu) max_delta_nu <- delta_nu
+            delta_nu <- seismology$delta_nu[seismo_row] * scaler[[model_i]]
+            if (delta_nu > max_delta_nu) max_delta_nu <- delta_nu
             
             nu_max <- seismology$nu_max[seismo_row] * scaler[[model_i]]
             cutoff_freq <- seismology$acoustic_cutoff[seismo_row] * 
@@ -94,14 +94,17 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             ## There is a bug in ADIPLS that causes l=1 frequencies to sometimes
             ## duplicate. The workaround is to shift all n at the duplicate
             ## down by one and remove the n=0.
-            ell <- data[data$l==1,]
-            ns <- ell$n[ell$n>0]
-            if (any(duplicated(ns))) {
-                dup <- which(duplicated(ns))[1]
-                toshift <- ns[which(ns>0) < dup]
-                ell$n[ell$n>0][toshift] <- ns[toshift] - 1
-                data[data$l==1,] <- ell
-                data <- data[!(data$l==1 & data$n==0),]
+            for (l_mode in 0:3) {
+                ell <- data[data$l==l_mode,]
+                ns <- ell$n[ell$n>0]
+                if (any(duplicated(ns))) {
+                    print(c(exp_value, l_mode, which(duplicated(ns))))
+                    dup <- which(duplicated(ns))[1]
+                    toshift <- ns[which(ns>0) < dup]
+                    ell$n[ell$n>0][toshift] <- ns[toshift] - 1
+                    data[data$l==l_mode,] <- ell
+                    data <- data[!(data$l==l_mode & data$n==0),]
+                }
             }
             
             cache[[model_i]] <- data
@@ -211,7 +214,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
             #############################
             ### Make difference plots ###
             #############################
-            print(ref$n)
+            #print(ref$n)
             n_range <- if (length(ref$n)>0) min(ref$n):max(ref$n) else c()
             #n_range <- n_range[n_range >= 5]
             diffs <- matrix(nrow=max(ref$n)-min(ref$n)+1, 
@@ -300,7 +303,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                 }
                 dnu_err[[l_name]] <- c(dnu_err[[l_name]],
                     mean(out))
-                print(c(summary(fit)$coefficients[2,2], mean(out), max(out)))
+                #print(c(summary(fit)$coefficients[2,2], mean(out), max(out)))
                 
                 relation <- ell$nu ~ ell$nu%%delta_nu
                 if (l_mode == 0 && counter == 1) {
@@ -460,7 +463,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                     "stars\nby", experiment_name))
         set_par()
         max_err <- max(dnu_err[["0"]], dnu_err[["1"]], dnu_err[["2"]])/2
-        for (l_mode in 0:2) {
+        for (l_mode in 0:3) {
             l_name <- toString(l_mode)
             relation <- delta_nus[[l_name]] ~ exp_vals
             if (l_mode == 0) {
@@ -483,7 +486,7 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                  add=TRUE, pch=l_mode, lty=5, cex=0.5,
                  col=ell_cl[l_mode+1], errbar.col=ell_cl[l_mode+1])
         }
-        legend("bottom", bty='n', inset=0, pch=2:0, lty=3:1, col=ell_cl[3:1],
+        legend("bottom", bty='n', inset=0, pch=3:0, lty=4:1, col=ell_cl[4:1],
                legend=c(#expression("\u2113"==3), 
                         expression("\u2113"==2),
                         expression("\u2113"==1),
@@ -494,35 +497,33 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
         ### Make plots of exp vs dnu diff ###
         #####################################
         cairo_pdf(file.path(plot_dir, ev_stage, 
-            paste0('sepdiff_', basename(experiment), '_', ev_stage, '.pdf')), 
+            paste0('ratio_', basename(experiment), '_', ev_stage, '.pdf')), 
             width=plot_width, height=plot_height, family=font)
-        make_layout(paste("Differences in Δν of", ev_stage,
+        make_layout(paste("Frequency separation ratios of", ev_stage,
                     "\nstars by degree and", experiment_name))
         set_par()
         diff_max <- -Inf
         diff_min <- Inf
-        for (l_mode in 1:2) {
-            y <- delta_nus[[toString(l_mode)]] - delta_nus[["0"]] + 
-                max(dnu_err[[toString(l_mode)]])/2
+        for (l_mode in 1:3) {
+            y <- delta_nus[[toString(l_mode)]] / delta_nus[["0"]]
             if (max(y) > diff_max) diff_max <- max(y)
             if (min(y) < diff_min) diff_min <- min(y)
         }
-        print(c("diff min: ", diff_min))
-        for (l_mode in 1:2) {
+        #print(c("diff min: ", diff_min))
+        for (l_mode in 1:3) {
             l_name <- toString(l_mode)
-            difference <- delta_nus[[l_name]] - delta_nus[["0"]]
+            difference <- delta_nus[[l_name]] / delta_nus[["0"]]
             relation <- difference ~ exp_vals
             if (l_mode == 1) {
                 plot(relation, pch=l_mode, main="", xlab="", yaxs='i',
                      col=ell_cl[l_mode+1], tck=0.01, cex=0.5,
-                     ylim=c(min(0, round(diff_min-0.05, 1)), 
-                            round(diff_max+0.05, 1)),
-                     ylab=expression("large separation diff."
+                     ylim=c(round(diff_min-0.0005, 4), 
+                            round(diff_max+0.0005, 4)),
+                     ylab=expression("large separation ratio"
                                      ~delta*Delta*nu["\u2113"]==
-                                     Delta*nu["\u2113"]-
+                                     Delta*nu["\u2113"]/
                                      Delta*nu[0]))
-                title(xlab=bquote(.(experiment_name)~.(freep)))#, 
-                      #mgp=par()$mgp-mgp_xoff)
+                title(xlab=bquote(.(experiment_name)~.(freep)))
                 lines(relation, lty=l_mode+1, col=ell_cl[l_mode+1])
                 npoints <- length(exp_vals[picker])
                 yerr <- dnu_err[["0"]][i_mid]/2
@@ -534,13 +535,17 @@ for (experiment in list.dirs(fgong_dir, recursive=FALSE)) {
                 points(relation, pch=l_mode, col=ell_cl[l_mode+1], cex=0.5)
                 lines(relation, lty=l_mode+1, col=ell_cl[l_mode+1])
             }
-            y <- difference[picker]
-            yerr <- dnu_err[[l_name]][picker]/2
-            errbar(exp_vals[picker], y, y - yerr, y + yerr,
+            y <- difference#[picker]
+            #yerr <- dnu_err[[l_name]]/2#[picker]/2
+            yerr <- (delta_nus[[l_name]] / delta_nus[["0"]]) *
+                    (dnu_err[[l_name]] / delta_nus[[l_name]]) * 
+                    (dnu_err[["0"]] / delta_nus[["0"]])
+            errbar(exp_vals,#[picker], 
+                   y, y - yerr, y + yerr,
                  add=TRUE, pch=l_mode, lty=5, cex=0.5,
                  col=ell_cl[l_mode+1], errbar.col=ell_cl[l_mode+1])
         }
-        legend("topleft", bty='n', inset=0, pch=2:1, lty=3:2, col=ell_cl[3:2],
+        legend("topleft", bty='n', inset=0, pch=3:1, lty=4:2, col=ell_cl[4:2],
             legend=c(#expression(delta*Delta*nu[3]), 
                      expression(delta*Delta*nu[2]),
                      expression(delta*Delta*nu[1])))
