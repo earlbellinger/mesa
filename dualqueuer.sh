@@ -8,8 +8,8 @@ change() { #param initval newval
 run() { # nameOfRun
     condor_submit mesa.job
     condor_wait condor.log
-    cp final_profile.data "LOGS/profile_$1.data"
-    cp final_profile.data.FGONG "LOGS/profile_$1.data.FGONG"
+    mv final_profile.data "LOGS/profile_$1.data"
+    mv final_profile.data.FGONG "LOGS/profile_$1.data.FGONG"
 }
 
 rerun() { # nameOfRun
