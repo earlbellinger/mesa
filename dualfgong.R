@@ -18,7 +18,7 @@ exp_dir <- file.path('dualexp')
 plot_dir <- file.path('plots')
 dir.create(plot_dir, showWarnings=FALSE)
 
-seismology <- function(profile_data, profile_header, freqs, history) {
+seismology <- function(profile_header, freqs, history) {
     history <- history[history$model_number==profile_header$model_number,]
     
     DF <- NULL
@@ -29,7 +29,7 @@ seismology <- function(profile_data, profile_header, freqs, history) {
     DF["log_g"] <- history$log_g
     DF["log_surf_z"] <- history$log_surf_z
     
-    DF["radius"] <- max(profile_data$radius)
+    #DF["radius"] <- max(profile_data$radius)
     DF["age"] <- profile_header$star_age
     DF["mass"] <- profile_header$star_mass
     DF["Teff"] <- profile_header$Teff
@@ -73,6 +73,8 @@ seismology <- function(profile_data, profile_header, freqs, history) {
 }
 
 parse_dir <- function(directory) {
+    print(directory)
+    
     # parse dirname string e.g. "M=1.0;Y=0.28"
     params <- NULL
     for (var in unlist(strsplit(basename(directory), ';'))) { 
@@ -87,20 +89,66 @@ parse_dir <- function(directory) {
     history <- read.table(file.path(log_dir, 'history.data'), 
         header=TRUE, skip=5)
     
+    # figure out which profiles & frequency files to use
+    profile_candidates <- logs[grep(profile_pattern, logs)]
+    freq_file_candidates <- logs[grep(freqs_pattern, logs)]
+    profile_files <- c()
+    freq_files <- c()
+    for (profile_file in profile_candidates) {
+        freq_name <- sub(".data", "-freqs.dat", profile_file, fixed=TRUE)
+        if (freq_name %in% freq_file_candidates) {
+            profile_files <- c(profile_files, profile_file)
+            freq_files <- c(freq_files, freq_name)
+        }
+    }
+    
     # obtain seismology information
     seis <- do.call(rbind, Map(function(profile_file, freqs_file)
-            seismology(read.table(profile_file, header=TRUE, skip=5), 
+            seismology(#read.table(profile_file, header=TRUE, skip=5), 
                        read.table(profile_file, header=TRUE, nrows=1, skip=1),
                        read.table(freqs_file, col.names=freqs_cols), 
                        history), 
-        profile_file=file.path(log_dir, logs[grep(profile_pattern, logs)]), 
-        freqs_file=file.path(log_dir, logs[grep(freqs_pattern, logs)])))
+        profile_file=file.path(log_dir, profile_files), 
+        freqs_file=file.path(log_dir, freq_files)))
     
     return(merge(rbind(params), seis))
 }
 
 DF <- do.call(rbind, Map(parse_dir, 
     directory=list.dirs(exp_dir, recursive=FALSE)))
+DF <- DF[complete.cases(DF),]
+
+
+### correlogram
+cairo_pdf(file.path(plot_dir, 'correlogram.pdf'),
+    width=11.69, height=8.27, family=font)
+plot(DF[,c(1:3, 6:12)], lower.panel=NULL, pch=3, cex=0.1)
+dev.off()
+
+### linear model
+cairo_pdf(file.path(plot_dir, 'Y_lm.pdf'),
+    width=plot_width, height=plot_height, family=font)
+fmla <- lm(Y ~ nu_max + exp(log_g) + exp(log_surf_z) + mass + Teff + 
+    delta_nu_0 + d_delta_nu_0 + delta_nu_1 + d_delta_nu_1 + 
+    delta_nu_3 + delta_nu + d_delta_nu, data=DF)
+boxplot(resid(fmla), ylab="Residuals", main="Y ~ observables", pch=3,
+    xlab=expression(atop(Y~"~"~M+g+z+T[eff]+nu[max]+
+        Delta*nu+Delta*nu[0]+Delta*nu[1]+Delta*nu[3]+"",
+        delta*Delta*nu+delta*Delta*nu[0]+delta*Delta*nu[1]+delta*Delta*nu[3])))
+abline(h=0, lty=2)
+abline(h=0.01, lty=3)
+abline(h=-0.01, lty=3)
+dev.off()
+
+
+fmla <- lm(Y ~ nu_max + 
+    delta_nu_0 + d_delta_nu_0 + delta_nu_1 + d_delta_nu_1 + 
+    delta_nu_3 + delta_nu + d_delta_nu, data=DF)
+
+
+Y ~ nu_max + exp(log_g) + exp(log_surf_z) + mass + Teff
++ delta_nu_0 + d_delta_nu_0 + delta_nu_1 + d_delta_nu_1 +
+delta_nu_3 + delta_nu + d_delta_nu
 
 data <- DF[c(FALSE, TRUE),]#
 #data <- DF[DF$age == 4570000000,]
