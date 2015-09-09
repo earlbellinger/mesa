@@ -40,6 +40,9 @@ mkdir "$path"
 fgong-amdl.d $1 "$path/$fname.amdl"
 cd "$path"
 
+logfile="fgong2freqs.log"
+exec > $logfile 2>&1
+
 ## Check that the amdl file was created 
 if [ ! -e "$fname.amdl" ]
   then
@@ -74,7 +77,7 @@ fi
 ## Create an adipls.in file with some decent (?) settings 
 echo "
  2  '$fname-6202'   @
- 9  '0'   @
+ 9  '$fname.log'   @
  11 '$fname.agsm'   @
  4  '$fname.amde'   @
  15 '$fname.ssm'    @

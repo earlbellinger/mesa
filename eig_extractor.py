@@ -22,13 +22,13 @@ def main(arguments):
                         help="don't save eigenfunction plots",
                         default=False, action='store_true')
     args = parser.parse_args(arguments)
-    parse_eig(eig_file=args.input, 
+    parse_eig(eig_filename=args.input, 
               output_dir=args.output,
               normalize=args.normalize,
               save_dat=(not args.suppress_dat),
               save_plot=(not args.suppress_plot))
 
-def parse_eig(eig_file, output_dir='', normalize=False, 
+def parse_eig(eig_filename, output_dir='', normalize=False, 
               save_dat=True, save_plot=True):
     if (save_dat or save_plot) and output_dir != '' and \
         not os.path.exists(output_dir):
@@ -42,48 +42,48 @@ def parse_eig(eig_file, output_dir='', normalize=False,
         mpl.rc('text', dvipnghack='true') 
         mpl.rcParams.update({'font.size': 18}) 
     
-    with open(eig_file, 'rb') as ff:
-        contents = ff.read()
+    with open(eig_filename, 'rb') as f:
+        eig_file = f.read()
     
     # number of mesh points and the mesh
     fmt = '<2i'
     size = struct.calcsize(fmt)
-    N1, N2 = struct.unpack(fmt, contents[:size])
-    contents = contents[size:]
+    N1, N2 = struct.unpack(fmt, eig_file[:size])
+    eig_file = eig_file[size:]
     
     # read in the x-axis
     fmt = '<'+N2*'d'
     size = struct.calcsize(fmt)
-    x = np.array(struct.unpack(fmt, contents[:size]))
+    x = np.array(struct.unpack(fmt, eig_file[:size]))
     if normalize:
         x = x/max(x)
-    contents = contents[size:]
+    eig_file = eig_file[size:]
     
-    while len(contents)>4:
+    while len(eig_file)>4:
         # not sure what this is
         fmt = '<2i'
         size = struct.calcsize(fmt)
-        out = struct.unpack(fmt, contents[:size])
-        contents = contents[size:]
+        out = struct.unpack(fmt, eig_file[:size])
+        eig_file = eig_file[size:]
         
         # obtain mode summary
         fmt = '<'+50*'d'
         size = struct.calcsize(fmt)
-        cs = struct.unpack(fmt, contents[:size])
+        cs = struct.unpack(fmt, eig_file[:size])
         l = int(cs[17])
         n = int(cs[18])
         print("Extracting eigenfunction for mode l=%d, n=%d"%(l,n))
-        contents = contents[size:]
+        eig_file = eig_file[size:]
         
         # eigenfunctions
         N = 2
         fmt = '<'+N*N2*'d'
         size = struct.calcsize(fmt)
-        z = np.array(struct.unpack(fmt,contents[:size]))
+        z = np.array(struct.unpack(fmt,eig_file[:size]))
         y1 = z[0::N]
         y2 = z[1::N]
         eigenfunction = np.vstack((x, y1, y2)).T
-        contents = contents[size:]
+        eig_file = eig_file[size:]
         
         fname = 'eig_l=%d_n=%d'%(l,n)
         if save_dat:
@@ -104,7 +104,7 @@ def parse_eig(eig_file, output_dir='', normalize=False,
             plt.savefig(os.path.join(output_dir, fname+'.png'))
             plt.close()
     
-    if len(contents) != 4:
+    if len(eig_file) != 4:
         print("Error: failed to parse eigenfunction")
 
 if __name__ == '__main__':

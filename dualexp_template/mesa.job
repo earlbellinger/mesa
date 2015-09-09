@@ -1,0 +1,16 @@
+Universe =vanilla
+getenv = True
+
+Executable =rn
+
+#should_transfer_files = YES
+#when_to_transfer_output = ON_EXIT
+
+Output =condor.out
+Error =condor.error
+Log =condor.log
+#request_memory = 1 GB
+#Requirements = Machine!="seismo31"
+
+queue
+

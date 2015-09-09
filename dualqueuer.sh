@@ -17,14 +17,16 @@ rerun() { # nameOfRun
     tail -n+7 LOGS/history.data >> history.data
 }
 
-dualexp() {
-    expname="M=$M;Y=$Y"
+dualexp() { # mass helium metallicity
+    expname="M=$1;Y=$2;Z=$3"
     dirname='dualexp'/$expname
     mkdir -p $dirname
-    cp -r 1M_pre_ms_to_rg_template/* $dirname
+    cp -r dualexp_template/* $dirname
     cd $dirname
-    change 'initial_y' '-1' "$Y"
-    change 'initial_mass' '1.0' "$M"
+    change 'initial_mass' '1.0' "$1"
+    change 'initial_y' '-1' "$2"
+    change 'initial_z' '0.02' "$3"
+    change 'Zbase' '0.02' "$3"
     
     ./mk
     run "ZAMS"
@@ -32,14 +34,17 @@ dualexp() {
     change "stop_near_zams" ".true." ".false."
     change "create_pre_main_sequence_model" ".true." ".false."
     change "load_saved_model" ".false." ".true."
-    rerun "solar-age"
+    change "write_profiles_flag" ".false." ".true."
+    rerun "H-exhausted"
     mv history.data LOGS
     cd -
 }
 
 for M in $(seq 0.8 0.1 1.2); do
     for Y in $(seq 0.23 0.01 0.33); do
-        dualexp $M $Y &
+        for Z in 0.001 0.004 0.01 0.02 0.03; do
+            dualexp $M $Y $Z &
+        done
     done
 done
 
