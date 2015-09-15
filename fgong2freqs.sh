@@ -17,28 +17,30 @@ if [ -z ${1+x} ] || [ $1 == '-h' ] || [ $1 == '--help' ]; then
 fi
 
 ## Check that the first input (FGONG file) exists
-if [ ! -e $1 ]; then
-    echo "Error: Cannot locate FGONG file" $1
+if [ ! -e "$1" ]; then
+    echo "Error: Cannot locate FGONG file $1"
     exit 1
 fi
 
 ## Pull out the name of the FGONG file
-fname="$(basename $1)"
-fname="${fname%%.*}-freqs"
+bname="$(basename $1)"
+fname="${bname%%.*}-freqs"
 
 ## If the second (OUTPUT) argument doesn't exist, create one from the first
 if [ -z ${2+x} ]; then
-    path=$(dirname $1)/$fname
+    path=$(dirname "$1")/"$fname"
   else
-    path=$2
+    path="$2"
 fi
 
 ## Create a directory for the results and go there
 ## Also convert the FGONG file to AMDL format and put it in the new directory
 mkdir "$path"
-#fname=(${path//\/}) # remove slashes 
-fgong-amdl.d $1 "$path/$fname.amdl"
+cp "$1" "$path" 
 cd "$path"
+#fname=(${path//\/}) # remove slashes 
+fgong-amdl.d "$bname" "$fname.amdl"
+#cd "$path"
 
 logfile="fgong2freqs.log"
 exec > $logfile 2>&1
@@ -71,7 +73,7 @@ redistrb.c.d "redistrb-$fname.in"
 ## Check that the redistribution was successful
 if [ ! -e "$fname-6202" ]; then
     echo "Error: Redistribution of $fname failed"
-    exit
+    exit 1
 fi
 
 ## Create an adipls.in file with some decent (?) settings 

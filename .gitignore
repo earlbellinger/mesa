@@ -1,5 +1,4 @@
 *exp/
-plots
-fgongs
-old*
-*-old
+plots/
+fgongs/
+*old*/

@@ -65,7 +65,7 @@
       
       photostep = 50
       write_profiles_flag = .false.
-      profile_interval = 3
+      profile_interval = 1
       history_interval = 1
       terminal_cnt = 10
       write_header_frequency = 10
