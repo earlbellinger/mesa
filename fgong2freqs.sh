@@ -78,11 +78,12 @@ fi
 
 ## Create an adipls.in file with some decent (?) settings 
 echo "
- 2  '$fname-6202'   @
- 9  '$fname.log'   @
- 11 '$fname.agsm'   @
- 4  '$fname.amde'   @
- 15 '$fname.ssm'    @
+ 2  '$fname-6202' @
+ 9  '$fname.log'  @
+ 11 '$fname.agsm' @
+ 4  '$fname.amde' @
+ 13 '$fname.g1k'  @
+ 15 '$fname.ssm'  @
  -1 ''   @
   cntrd,
 mod.osc.cst.int.out.dgn     @
@@ -94,39 +95,39 @@ mod:
        ,       ,      , @
 osc:
   el,nsel,els1,dels,dfsig1,dfsig2,nsig1,nsig2,
-    ,    4,  0,   1,    0,       ,    1,    1,   @
+    ,   4,   0,   1,     0,      ,    1,    1, @
   itrsig,sig1,istsig,inomde,itrds,
-       1,   5,     1,     1,    , @
+       1,   5,     1,     1,     , @
   dfsig,nsig,iscan,sig2,
-       ,  2,   5000, 10000,     @
+       ,  2,  5000, 10000, @
   eltrw1, eltrw2, sgtrw1, sgtrw2,
-       0,     -1,     0,       -1,  @
+       0,     -1,      0,     -1,  @
 cst:
   cgrav
-  6.672320e-8               @
+  6.672320e-8 @
 int:
   iplneq,iturpr,icow,alb,
-  0,0,0,1,,,,,,             @
+       0,     0,   0,  1, @
   istsbc,fctsbc,ibotbc,fcttbc,
-  1,0,0,0,,,,,  @
+       1,     0,     0,     0, @
   mdintg,iriche,xfit,fcnorm,eps,epssol,itmax,dsigre,
-  5,1,0.99,,,,15,0,,,,,,  @
-  fsig,dsigmx,irsevn,xmnevn,nftmax,itsord
-  0.001,0.1,2,0,1,20,,,,,  @
+       5,     1,0.99,      ,   ,      ,   15,     0, @
+  fsig,dsigmx,irsevn,xmnevn,nftmax,itsord,
+  0.001,  0.1,     2,     0,     1,    20, @
 out:
-  istdpr,nout,nprcen,irsord,iekinr
-  9,50,100,20,0,,,,,,,,     @
+  istdpr,nout,nprcen,irsord,iekinr,
+       9,  50,   100,    20,     0, @
   iper,ivarf,kvarf,npvarf,nfmode,
-  1,1,2,0,3,,,,,,,,     @
+     1,    1,    2,     0,     3, @
   irotkr,nprtkr,igm1kr,npgmkr,ispcpr,
-  0,,0,,0,,,,,,,     @
+       0,      ,     1,      ,     0, @
   icaswn, sigwn1, sigwn2, frqwn1, frqwn2,iorwn1, iorwn2, frlwn1, frlwn2
-        ,      0,     -1,      0,  10000,  -200,     50,      0,     -1,   @
+        ,      0,     -1,      0,  10000,  -200,     50,      0,     -1, @
 dgn:
-  itssol,idgtss,moddet,iprdet,npout
-  0,0,0,0,,,,,,,,,,,     @
-  imstsl,imissl,imjssl,idgnrk
-  ,,,,,,,,,    @
+  itssol,idgtss,moddet,iprdet,npout,
+       0,     0,     0,     0,     , @
+  imstsl,imissl,imjssl,idgnrk,
+        ,      ,      ,      , @
 " > "adipls-$fname.in"
 
 ### Time to Run ADIPLS!

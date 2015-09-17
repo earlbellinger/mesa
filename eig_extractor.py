@@ -79,7 +79,7 @@ def parse_eig(eig_filename, output_dir='', normalize=False,
         N = 2
         fmt = '<'+N*N2*'d'
         size = struct.calcsize(fmt)
-        z = np.array(struct.unpack(fmt,eig_file[:size]))
+        z = np.array(struct.unpack(fmt, eig_file[:size]))
         y1 = z[0::N]
         y2 = z[1::N]
         eigenfunction = np.vstack((x, y1, y2)).T
