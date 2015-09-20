@@ -27,20 +27,22 @@ for (cyg in c('16 Cyg A', '16 Cyg B')) {
     # start echelle device
     cairo_pdf(file.path(plot_dir, paste0('echelle_', spaceless, '.pdf')), 
         width=plot_width, height=plot_height, family=font)
-    layout(matrix(c(1,2), ncol=1), heights=c(0.14,0.86))
-    par(mar=rep(0,4))
+    #layout(matrix(c(1,2), ncol=1), heights=c(0.14,0.86))
+    #par(mar=rep(0,4))
     plot.new()
-    text(0.5, 0.5, paste("Echelle diagram of", cyg), cex=2, font=2)
-    par(las=1, mar=c(3, 3.4, 0.1, 1), mgp=c(2, 0.25, 0))
+    #text(0.5, 0.5, paste("Echelle diagram of", cyg), cex=2, font=2)
+    #par(las=1, mar=c(3, 3.4, 1, 1), mgp=c(2, 0.25, 0), cex.lab=cex_lab)
+    set_par()
     
     # start frequency device
     cairo_pdf(file.path(plot_dir, paste0('nu_', spaceless, '.pdf')), 
         width=plot_width, height=plot_height, family=font)
-    layout(matrix(c(1,2), ncol=1), heights=c(0.14,0.86))
-    par(mar=rep(0,4))
+    #layout(matrix(c(1,2), ncol=1), heights=c(0.14,0.86))
+    #par(mar=rep(0,4))
     plot.new()
-    text(0.5, 0.5, paste("Frequencies of", cyg), cex=2, font=2)
-    par(las=1, mar=c(3, 3.4, 0.1, 1), mgp=c(2, 0.25, 0))#bty="l", 
+    #text(0.5, 0.5, paste("Frequencies of", cyg), cex=2, font=2)
+    set_par()
+    #par(las=1, mar=c(3, 3.4, 1, 1), mgp=c(2, 0.25, 0), cex.lab=cex_lab)
     plot(data$nu ~ data$n, col=cl[data$l+1], pch=data$l, 
          main="", xlab="", tck=0, 
          cex=40*dnorm(data$nu, nu_max, converted_fwhm)/data$dnu,
@@ -152,11 +154,12 @@ for (cyg in c('16 Cyg A', '16 Cyg B')) {
     # start difference device
     cairo_pdf(file.path(plot_dir, paste0('diff_', spaceless, '.pdf')), 
         width=plot_width, height=plot_height, family=font)
-    layout(matrix(c(1,2), ncol=1), heights=c(0.14,0.86))
-    par(mar=rep(0,4))
+    #layout(matrix(c(1,2), ncol=1), heights=c(0.14,0.86))
+    #par(mar=rep(0,4))
     plot.new()
-    text(0.5, 0.5, paste("Residuals of", cyg), cex=2, font=2)
-    par(las=1, mar=c(3, 3.4, 0.1, 1), mgp=c(2, 0.25, 0))
+    #text(0.5, 0.5, paste("Residuals of", cyg), cex=2, font=2)
+    #par(las=1, mar=c(3.5, 4.5, 1, 1), mgp=c(2, 0.25, 0), cex.lab=cex_lab)
+    set_par()
     #fit <- fits[1]
     df <- data.frame()
     for (l_mode in 0:3) {

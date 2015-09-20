@@ -9,7 +9,7 @@ from time import sleep
 def main(arguments):
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('-M', default=[0.8, 1.2], nargs=2,
+    parser.add_argument('-M', default=[0.8, 2], nargs=2,
                         help='range of masses')
     parser.add_argument('-Y', default=[0.2, 0.4], nargs=2,
                         help='range of helium values')

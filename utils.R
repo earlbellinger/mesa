@@ -50,13 +50,13 @@ solar_scale = sqrt(solar_mass/solar_radius^3)
 font = "Palatino"
 approx_xout = seq(0, 1, .04)
 color_offset = 10
-plot_width = 6
+plot_width = 9
 plot_height = 6
 layout_width_three = c(.4,.4,.2)
 layout_width_two = c(.8, .2)
 cex_lab = 1.3
 title_cex = 1.3
-par_mar = c(3.5, 4.5, 0.1, 1)
+par_mar = c(3.5, 4.5, 1, 1)
 par_mgp = c(2.5, 0.25, 0)
 mgp_xoff = c(0.5,0,0)
 layout_heights = c(0.14,0.86)
@@ -66,14 +66,16 @@ set_par <- function()
 
 make_layout <- function(title_text, outside_legend=FALSE) {
     if (outside_legend)
-        layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
-               heights=layout_heights, 
+        layout(matrix(c(1,2), ncol=2, byrow=TRUE),  
                widths=layout_width_two)
-    else
-        layout(matrix(c(1,2), ncol=1, byrow=TRUE), 
-               heights=layout_heights)
-    make_title(title_text, 
-        title.cex=ifelse(outside_legend, 1.2*title_cex, title_cex))
+        #layout(matrix(c(1,1,2,3), ncol=2, byrow=TRUE), 
+        #       heights=layout_heights, 
+        #       widths=layout_width_two)
+    #else
+        #layout(matrix(c(1,2), ncol=1, byrow=TRUE), 
+        #       heights=layout_heights)
+    #make_title(title_text, 
+    #    title.cex=ifelse(outside_legend, 1.2*title_cex, title_cex))
 }
 
 make_title <- function(title_text, title.cex=title_cex) {
@@ -103,13 +105,13 @@ start_dev <- function(maintext, plot_name, experiment, ev_stage,
     cairo_pdf(file.path(plot_subdir, 
         paste0(plot_name, '_', basename(experiment), '_', ev_stage, '.pdf')),
               width=plot_width, height=plot_height, family=font)
-    layout(matrix(c(1,1,1,2,3,4,5,6,4), ncol=3, byrow=TRUE), 
-           heights=c(0.14,0.43,0.43), widths=width)
-    #layout(matrix(c(1,2,3,4,5,3), ncol=3, byrow=TRUE), 
-    #       heights=c(0.5,0.5), widths=width)
-    make_title(paste(maintext, sub("_", " ", ev_stage), 
-                     "stars\nby", experiment_name),
-               title.cex=title_cex*1.5)
+    #layout(matrix(c(1,1,1,2,3,4,5,6,4), ncol=3, byrow=TRUE), 
+    #       heights=c(0.14,0.43,0.43), widths=width)
+    layout(matrix(c(1,2,3,4,5,3), ncol=3, byrow=TRUE), 
+           heights=c(0.5,0.5), widths=width)
+    #make_title(paste(maintext, sub("_", " ", ev_stage), 
+    #                 "stars\nby", experiment_name),
+    #           title.cex=title_cex*1.5)
 }
 
 load_experiment_info <- function(experiment, simulations) {

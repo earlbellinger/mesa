@@ -22,13 +22,13 @@ def main(arguments):
                         help="don't save kernel plots",
                         default=False, action='store_true')
     args = parser.parse_args(arguments)
-    parse_g1k(g1k_filename=args.input, 
+    parse_g1k(filename=args.input, 
               output_dir=args.output,
               normalize=args.normalize,
               save_dat=(not args.suppress_dat),
               save_plot=(not args.suppress_plot))
 
-def parse_g1k(g1k_filename, output_dir='', normalize=False, 
+def parse_g1k(filename, output_dir='', normalize=False, 
               save_dat=True, save_plot=True):
     if (save_dat or save_plot) and output_dir != '' and \
         not os.path.exists(output_dir):
@@ -42,47 +42,47 @@ def parse_g1k(g1k_filename, output_dir='', normalize=False,
         mpl.rc('text', dvipnghack='true') 
         mpl.rcParams.update({'font.size': 18}) 
     
-    with open(g1k_filename, 'rb') as f:
-        g1k_file = f.read()
+    with open(filename, 'rb') as f:
+        bin_file = f.read()
     
-    while len(g1k_file)>0:
+    while len(bin_file)>0:
         # not sure what this is
         fmt = '<i'
         size = struct.calcsize(fmt)
-        out = struct.unpack(fmt, g1k_file[:size])
-        g1k_file = g1k_file[size:]
+        out = struct.unpack(fmt, bin_file[:size])
+        bin_file = bin_file[size:]
         
         # obtain mode summary
         fmt = '<'+50*'d'
         size = struct.calcsize(fmt)
-        cs = struct.unpack(fmt, g1k_file[:size])
+        cs = struct.unpack(fmt, bin_file[:size])
         l = int(cs[17])
         n = int(cs[18])
         print("Extracting gamma_1 kernel for mode l=%d, n=%d"%(l,n))
-        g1k_file = g1k_file[size:]
+        bin_file = bin_file[size:]
         
         # get number of grid points
         fmt = '<i'
         size = struct.calcsize(fmt)
-        N2, = struct.unpack(fmt, g1k_file[:size])
-        g1k_file = g1k_file[size:]
+        N2, = struct.unpack(fmt, bin_file[:size])
+        bin_file = bin_file[size:]
         
         # kernel 
         N = 2
         fmt = '<'+N*N2*'d'
         size = struct.calcsize(fmt)
-        z = np.array(struct.unpack(fmt, g1k_file[:size]))
+        z = np.array(struct.unpack(fmt, bin_file[:size]))
         x = z[0::N]
         if normalize:
             x = x/max(x)
-        
         Knl = z[1::N]
         kernel = np.vstack((x, Knl)).T
-        g1k_file = g1k_file[size:]
-
-        fname = 'g1k_l=%d_n=%d'%(l,n)
+        bin_file = bin_file[size:]
+        
+        # save 
+        out_fname = 'g1k_l=%d_n=%d'%(l,n)
         if save_dat:
-            np.savetxt(os.path.join(output_dir, fname+'.dat'), kernel)
+            np.savetxt(os.path.join(output_dir, out_fname+'.dat'), kernel)
         if save_plot:
             plt.axhspan(0, 0, ls='dashed')
             plt.plot(x, Knl, 'r-')
@@ -94,16 +94,16 @@ def parse_g1k(g1k_filename, output_dir='', normalize=False,
             if normalize:
                 plt.xlim([0, 1.01])
             plt.tight_layout()
-            plt.savefig(os.path.join(output_dir, fname+'.png'))
+            plt.savefig(os.path.join(output_dir, out_fname+'.png'))
             plt.close()
         
-        # still not sure what this is
+        # not sure what this is either
         fmt = '<i'
         size = struct.calcsize(fmt)
-        out = struct.unpack(fmt, g1k_file[:size])
-        g1k_file = g1k_file[size:]
+        out = struct.unpack(fmt, bin_file[:size])
+        bin_file = bin_file[size:]
     
-    if len(g1k_file) != 0:
+    if len(bin_file) != 0:
         print("Error: failed to parse g1k file")
 
 if __name__ == '__main__':
