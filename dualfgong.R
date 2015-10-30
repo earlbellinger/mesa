@@ -14,6 +14,7 @@ library(parallelMap)
 library(stargazer)
 library(plyr)
 library(matrixStats)
+library(mblm)
 
 plot_width <- 9
 plot_height <- 6
@@ -53,66 +54,136 @@ latex_labs <- c(expression(M[0]),
                 expression(epsilon[3]))
 
 ### Obtain seismic information from frequencies 
+
+separation <- function(first_l, first_n, second_l, second_n, df) {
+  first <- df$l == first_l & df$n == first_n
+  second <- df$l == second_l & df$n == second_n
+  if (sum(first) == 1 && sum(second) == 1)
+    return(df[first,]$nu - df[second,]$nu)
+  return(NA)
+}
+
+dnu <- function(l, n, df) separation(l, n, l+2, n-1, df)
+Dnu <- function(l, n, df) separation(l, n, l, n-1, df)
+r02 <- function(n, df) dnu(0, n, df) / Dnu(1, n, df)
+r13 <- function(n, df) dnu(1, n, df) / Dnu(0, n+1, df)
+
+get_averages <- function(f, df, ell, freqs, l=NA) {
+  sep_name <- deparse(substitute(f))
+  if (sep_name == 'dnu' || sep_name == 'Dnu') {
+    a <- sapply(unique(ell$n), function(n) f(l, n, freqs))
+    sep_name <- paste0(sep_name, '_', l)
+  } else {
+    a <- sapply(unique(ell$n), function(n) f(n, freqs))
+  }
+  not.nan <- complete.cases(a)
+  a <- a[not.nan]
+  b <- ell$n[not.nan]
+  df[paste0(sep_name, "_median")] <- median(a)
+  fit <- mblm(a~b, repeated=1)
+  df[paste0(sep_name, "_slope")] <- coef(fit)[2]
+  df[paste0(sep_name, "_intercept")] <- coef(fit)[1]
+  df
+}
+
 seismology <- function(freqs, nu_max, acoustic_cutoff=Inf) {
-    seis.DF <- NULL
-    
-    converted_fwhm <- (0.66*nu_max**0.88)/(2*sqrt(2*log(2)))
-    
-    freqs <- unique(freqs[freqs$nu < acoustic_cutoff,])
-    # fix radial modes because ADIPLS breaks sometimes
-    for (l_deg in 0:3) {
-        # grab the relevant l's and n's 
-        ell <- freqs[freqs$l==l_deg,]
-        ns <- ell$n[ell$n>0]
-        # check if any n's are duplicated and if so, shift them down
-        if (any(duplicated(ns))) {
-            return(NULL) # screw it, just discard this data
-            dup <- which(duplicated(ns))[1] # grab duplicated (hopef. only one)
-            toshift <- ns[which(ns>0) < dup] # find the ones to shift 
-            ell$n[ell$n>0][toshift] <- ns[toshift] - 1 # calculate new n vals
-            freqs[freqs$l==l_deg,] <- ell # replace the old with the new 
-            freqs <- freqs[!(freqs$l==l_deg & freqs$n==0),] # overwrite data
-        }
+  if (nrow(freqs) == 0) return(NULL)
+  
+  seis.DF <- NULL
+  
+  converted_fwhm <- (0.66*nu_max**0.88)/(2*sqrt(2*log(2)))
+  
+  freqs <- unique(freqs[freqs$nu < acoustic_cutoff,])
+  # fix radial modes because ADIPLS breaks sometimes
+  for (l_deg in 0:3) {
+    # grab the relevant l's and n's 
+    ell <- freqs[freqs$l==l_deg,]
+    ns <- ell$n[ell$n>0]
+    # check if any n's are duplicated and if so, shift them down
+    if (any(duplicated(ns))) {
+      return(NULL) # screw it, just discard this data
+      dup <- which(duplicated(ns))[1] # grab duplicated (hopef. only one)
+      toshift <- ns[which(ns>0) < dup] # find the ones to shift 
+      ell$n[ell$n>0][toshift] <- ns[toshift] - 1 # calculate new n vals
+      freqs[freqs$l==l_deg,] <- ell # replace the old with the new 
+      freqs <- freqs[!(freqs$l==l_deg & freqs$n==0),] # overwrite data
     }
+  }
+  
+  # calculate frequency separations
+  ells <- sort(unique(freqs$l))
+  for (l_deg in ells) {
+    ell <- freqs[freqs$n > 0 & freqs$l==l_deg,] # pressure modes
+    #gaussian_env <- dnorm(ell$nu, nu_max, converted_fwhm)
+    #fit <- lm(ell$nu ~ ell$n, weights=gaussian_env)
+    fit <- mblm(nu ~ n, dataframe=ell, repeated=TRUE)
+    seis.DF[paste0("Dnu_", l_deg)] <- coef(fit)[2]
+    seis.DF[paste0("eps_", l_deg)] <- coef(fit)[1]/coef(fit)[2]
     
-    # calculate delta_nu and d_delta_nu
-    ells <- sort(unique(freqs$l))
-    for (l_deg in ells) {
-        ell <- freqs[freqs$n > 0 & freqs$l==l_deg,] # pressure modes
-        gaussian_env <- dnorm(ell$nu, nu_max, converted_fwhm)
-        fit <- lm(ell$nu ~ ell$n, weights=gaussian_env)
-        seis.DF[paste0("Dnu_", l_deg)] <- coef(fit)[2]
-        seis.DF[paste0("eps_", l_deg)] <- coef(fit)[1]/coef(fit)[2]
-        
-        ell2 <- freqs[freqs$n > 0 & freqs$l==l_deg+2,]
-        if (nrow(ell2) > 0) {
-            diffs <- c()
-            nus <- c()
-            for (ii in 1:nrow(ell)) {
-                row_i <- ell[ii,]
-                if (any(ell2$n == row_i$n-1)) {
-                    dnu_n <- (row_i$nu - ell2$nu[ell2$n == (row_i$n-1)])[1]
-                    if (dnu_n > 0 && dnu_n < 50) {
-                        diffs <- c(diffs, dnu_n)
-                        nus <- c(nus, row_i$nu)
-                    }
-                }
-            }
-            seis.DF[paste0("dnu_", l_deg)] <- 
-                if (length(nus)>0 && length(diffs) == length(nus)) {
-                    gaussian_env <- dnorm(nus, nu_max, converted_fwhm)
-                    #shifted <- nus - nu_max
-                    #fit <- lm(diffs ~ shifted, weights=gaussian_env)
-                    #coef(fit)[2]
-                    #fit <- mblm(diffs ~ shifted)
-                    #coef(fit)[1]
-                    #weighted.mean(diffs, gaussian_env)
-                    weightedMedian(diffs, gaussian_env)
-            } else { NA }
-        }
-        #seis.DF[paste0("d_", strname)] <- coef(summary(fit))[2, "Std. Error"]
+    if (any(freqs$l==l_deg+2)) {
+      seis.DF <- get_averages(dnu, seis.DF, ell, freqs, l_deg)
+      #a <- sapply(unique(ell$n), function(n) small_sep(l_deg, n, freqs))
+      #not.nan <- complete.cases(a)
+      #a <- a[not.nan]
+      #b <- ell$n[not.nan]
+      #seis.DF[paste0("dnu_", l_deg)] <- median(a)
+      #fit <- mblm(a~b, repeated=1)
+      #seis.DF[paste0("dnu_slope_", l_deg)] <- coef(fit)[2]
+      #seis.DF[paste0("dnu_intercept_", l_deg)] <- coef(fit)[1]
+    #}
     }
-    return(seis.DF)
+  }
+  seis.DF <- get_averages(r02, seis.DF, ell, freqs)
+  seis.DF <- get_averages(r13, seis.DF, ell, freqs)
+  
+#   # calculate frequency ratios
+#   a <- sapply(unique(ell$n), function(n) r02(n, freqs))
+#   not.nan <- complete.cases(a)
+#   a <- a[not.nan]
+#   b <- freqs[freqs$l==0,]$n[not.nan]
+#   seis.DF["r02_median"] <- median(a)
+#   fit <- mblm(a~b, repeated=1)
+#   seis.DF["r02_slope"] <- coef(fit)[2]
+#   seis.DF["r02_intercept"] <- coef(fit)[1]
+#   
+#   a <- sapply(unique(ell$n), function(n) r13(n, freqs))
+#   not.nan <- complete.cases(a)
+#   a <- a[not.nan]
+#   b <- freqs[freqs$l==0,]$n[not.nan]
+#   seis.DF["r02_median"] <- median(a)
+#   fit <- mblm(a~b, repeated=1)
+#   seis.DF["r13_slope"] <- coef(fit)[2]
+#   seis.DF["r13_intercept"] <- coef(fit)[1]
+    
+#     ell2 <- freqs[freqs$n > 0 & freqs$l==l_deg+2,]
+#     if (nrow(ell2) > 0) {
+#       diffs <- c()
+#       nus <- c()
+#       for (ii in 1:nrow(ell)) {
+#         row_i <- ell[ii,]
+#         if (any(ell2$n == row_i$n-1)) {
+#           dnu_n <- (row_i$nu - ell2$nu[ell2$n == (row_i$n-1)])[1]
+#           if (dnu_n > 0 && dnu_n < 50) {
+#             diffs <- c(diffs, dnu_n)
+#             nus <- c(nus, row_i$nu)
+#           }
+#         }
+#       }
+#       seis.DF[paste0("dnu_", l_deg)] <- 
+#         if (length(nus)>0 && length(diffs) == length(nus)) {
+#           gaussian_env <- dnorm(nus, nu_max, converted_fwhm)
+#           #shifted <- nus - nu_max
+#           #fit <- lm(diffs ~ shifted, weights=gaussian_env)
+#           #coef(fit)[2]
+#           #fit <- mblm(diffs ~ shifted)
+#           #coef(fit)[1]
+#           #weighted.mean(diffs, gaussian_env)
+#           weightedMedian(diffs, gaussian_env)
+#         } else { NA }
+#     }
+#     #seis.DF[paste0("d_", strname)] <- coef(summary(fit))[2, "Std. Error"]
+# }
+  return(seis.DF)
 }
 
 ### Obtain observable properties from models 
@@ -149,8 +220,9 @@ get_obs <- function(profile_file, freqs_file, ev_history) {
     obs.DF["Fe_H"] <- log10(Z/H/Z_div_X_solar)
     
     obs.DF["nu_max"] <- hstry$nu_max
+    nu_max <- obs.DF["nu_max"]
     
-    seis.DF <- seismology(freqs, obs.DF["nu_max"], acoustic_cutoff)
+    seis.DF <- seismology(freqs, nu_max, acoustic_cutoff)
     
     return(merge(rbind(obs.DF), rbind(seis.DF)))
 }
@@ -213,6 +285,8 @@ DF <- if (file.exists(fname)) {
     write.table(DF, fname, quote=FALSE, sep='\t', row.names=FALSE)
     write.table(t(sapply(DF, fivenum)), "fivenums.dat", quote=FALSE, sep='\t',
         row.names=TRUE, col.names=FALSE)
+
+    if (FALSE) {
     ### inputs
     cairo_pdf(file.path(plot_dir, 'correlogram-sobol-inputs.pdf'),
         width=11.69, height=8.27, family=font)
@@ -289,6 +363,7 @@ DF <- if (file.exists(fname)) {
                 xlab=expression("Spearman rank correlation coefficient"~rho))
             dev.off()
         }
+    }
     }
 }
 
