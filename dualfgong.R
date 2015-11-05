@@ -24,7 +24,7 @@ freqs_cols <- c('l', 'n', 'nu', 'inertia')
 profile_pattern <- 'profile.+.data$'
 freqs_pattern <- 'profile.+-freqs.dat$'
 
-exp_dir <- file.path('diffusion_off')
+exp_dir <- file.path('diffusion')
 plot_dir <- file.path('plots')
 dir.create(plot_dir, showWarnings=FALSE)
 
@@ -95,7 +95,7 @@ r13 <- function(n, df) dnu(1, n, df) / Dnu(0, n+1, df)
 r01 <- function(n, df) dd(0, 1, n, df) / Dnu(1, n, df)
 r10 <- function(n, df) dd(1, 0, n, df) / Dnu(0, n+1, df)
 
-get_averages <- function(f, df, freqs, l_degs, plot=FALSE) {
+get_averages <- function(f, df, freqs, l_degs, fwhm, nu_max, plot=FALSE) {
   sep_name <- deparse(substitute(f))
   a <- c()
   b <- c()
@@ -109,7 +109,7 @@ get_averages <- function(f, df, freqs, l_degs, plot=FALSE) {
       }
       not.nan <- complete.cases(vals)
       a <- c(a, vals[not.nan])
-      b <- c(b, ell$n[not.nan])
+      b <- c(b, ell$nu[not.nan])
       pchs = c(pchs, rep(l_deg+1, length(a)))
   }
   
@@ -129,8 +129,10 @@ get_averages <- function(f, df, freqs, l_degs, plot=FALSE) {
   if (sep_name == 'dnu')
       sep_name <- paste0(sep_name, l_deg, l_deg+2)
   
-  df[paste0(sep_name, "_median")] <- median(a)
-  fit <- mblm(a~b, repeated=1)
+  gaussian_env <- dnorm(b, nu_max, fwhm)
+  df[paste0(sep_name, "_median")] <- weightedMedian(a, gaussian_env)
+  fit <- lm(a~b, weights=gaussian_env)
+  #mblm(a~b, repeated=1)
   df[paste0(sep_name, "_slope")] <- coef(fit)[2]
   df[paste0(sep_name, "_intercept")] <- coef(fit)[1]
   
@@ -139,10 +141,12 @@ get_averages <- function(f, df, freqs, l_degs, plot=FALSE) {
             paste0(sep_name, '-', plot, '.pdf')),
         width=4, height=2.5, family=font)
     par(mar=c(3, 4, 1, 1), mgp=c(2, 0.25, 0), cex.lab=1.3)
-    plot(a~b, tck=0, ylab=ylab, 
-         pch=if (length(l_degs)==1) 3 else pchs, 
-         xlab=expression("radial order"~n))
+    c <- 1.75/max(gaussian_env)
+    plot(a~b, tck=0, ylab=ylab, cex=gaussian_env*c,
+         pch=if (length(l_degs)==1) 1 else pchs, 
+         xlab=expression("frequency"~"["*mu*Hz*"]"))
     abline(fit, lty=2)
+    abline(v=nu_max, lty=3)
     magaxis(side=1:4, family=font, tcl=0.25, labels=FALSE)
     if (length(l_degs)>1)
         legend("topright", pch=l_degs+1, legend=paste0("l=", l_degs), bty="n")
@@ -152,12 +156,12 @@ get_averages <- function(f, df, freqs, l_degs, plot=FALSE) {
   df
 }
 
-seismology <- function(freqs, acoustic_cutoff=Inf, plot=FALSE) {
+seismology <- function(freqs, nu_max, acoustic_cutoff=Inf, plot=FALSE) {
   if (nrow(freqs) == 0) return(NULL)
   
   seis.DF <- NULL
   
-  #converted_fwhm <- (0.66*nu_max**0.88)/(2*sqrt(2*log(2)))
+  fwhm <- (0.66*nu_max**0.88)/(2*sqrt(2*log(2)))
   
   freqs <- unique(freqs[freqs$nu < acoustic_cutoff,])
   for (l_deg in 0:3) # sometimes ADIPLS repeats 'n's
@@ -175,20 +179,21 @@ seismology <- function(freqs, acoustic_cutoff=Inf, plot=FALSE) {
     #if (any(freqs$l==l_deg+2))
     #  seis.DF <- get_averages(dnu, seis.DF, freqs, l_deg, plot)
   #}
-  seis.DF <- get_averages(Dnu, seis.DF, freqs, 0, plot=plot)
-  seis.DF <- get_averages(Dnu, seis.DF, freqs, 0:3, plot=plot)
-  seis.DF <- get_averages(dnu, seis.DF, freqs, 0, plot=plot)
-  seis.DF <- get_averages(dnu, seis.DF, freqs, 1, plot=plot)
-  seis.DF <- get_averages(r02, seis.DF, freqs, 0, plot=plot)
-  seis.DF <- get_averages(r13, seis.DF, freqs, 0, plot=plot)
-  seis.DF <- get_averages(r10, seis.DF, freqs, 0, plot=plot)
-  seis.DF <- get_averages(r01, seis.DF, freqs, 0, plot=plot)
+  #seis.DF <- get_averages(Dnu, seis.DF, freqs, 0, fwhm, nu_max, plot=plot)
+  seis.DF <- get_averages(Dnu, seis.DF, freqs, sort(unique(freqs$l)), 
+    fwhm, nu_max, plot=plot)
+  seis.DF <- get_averages(dnu, seis.DF, freqs, 0, fwhm, nu_max, plot=plot)
+  seis.DF <- get_averages(dnu, seis.DF, freqs, 1, fwhm, nu_max, plot=plot)
+  seis.DF <- get_averages(r02, seis.DF, freqs, 0, fwhm, nu_max, plot=plot)
+  seis.DF <- get_averages(r13, seis.DF, freqs, 0, fwhm, nu_max, plot=plot)
+  seis.DF <- get_averages(r10, seis.DF, freqs, 0, fwhm, nu_max, plot=plot)
+  seis.DF <- get_averages(r01, seis.DF, freqs, 0, fwhm, nu_max, plot=plot)
   return(seis.DF)
 }
 
 ### Obtain observable properties from models 
 get_obs <- function(profile_file, freqs_file, ev_history) {
-    print(profile_file)
+    #print(profile_file)
     
     profile_header <- read.table(profile_file, header=TRUE, nrows=1, skip=1)
     freqs <- read.table(freqs_file, col.names=freqs_cols, fill=TRUE)
@@ -200,13 +205,16 @@ get_obs <- function(profile_file, freqs_file, ev_history) {
     #if (any(conv_cores > 0)) return(NA)
     
     hstry <- ev_history[ev_history$model_number==profile_header$model_number,]
-    if (nrow(hstry) == 0 || hstry$mass_conv_core > 0) return(NULL)
+    if (nrow(hstry) == 0) {#|| hstry$mass_conv_core > 0) 
+        print(c("Model ", profile_file, " failed"))
+        return(NULL)
+    }
     
     obs.DF <- NULL
     
     obs.DF["age"] <- profile_header$star_age
     
-    #obs.DF["mass"] <- profile_header$star_mass
+    obs.DF["mass"] <- profile_header$star_mass
     obs.DF["He"] <- (profile_header$star_mass_he3 + 
         profile_header$star_mass_he4)/profile_header$star_mass
     
@@ -225,9 +233,20 @@ get_obs <- function(profile_file, freqs_file, ev_history) {
     obs.DF["Fe_H"] <- log10(Z/H/Z_div_X_solar)
     
     obs.DF["nu_max"] <- hstry$nu_max
+    nu_max <- hstry$nu_max
     
-    seis.DF <- seismology(freqs, acoustic_cutoff,
-        plot=ifelse(sample(0:5000, 1)==0, gsub("/", "-", freqs_file), FALSE))
+    seis.DF <- seismology(freqs, acoustic_cutoff, nu_max,
+        plot=ifelse(sample(0:10000, 1)==0, gsub("/", "-", freqs_file), FALSE))
+    
+    if (hstry$mass_conv_core > 0) {
+        print(paste("ConvectiveCore", 
+                profile_file, 
+                obs.DF["age"],
+                obs.DF["mass"],
+                obs.DF["He"],
+                hstry$mass_conv_core, 
+                hstry$mass_conv_core/profile_header$star_mass))
+    }
     
     return(merge(rbind(obs.DF), rbind(seis.DF)))
 }
@@ -278,8 +297,58 @@ parse_dir <- function(directory) {
 
 
 
+
+### Obtain properties of real stars varied within their uncertainties 
+monte_carlo_perturbations <- function(obs_data_file, freqs_data_file,
+        n_perturbations=10000) {
+    freqs <- read.table(freqs_data_file, header=TRUE)
+    obs_data <- read.table(obs_data_file, header=TRUE)
+    noisy_freqs <- freqs
+    parallelStartMulticore(max(1, detectCores()))
+    do.call(rbind, with(obs_data, {
+        parallelMap(function(n) {
+            obs.DF <- data.frame(
+                radius     = rnorm(1, value[name=="radius"], 
+                ifelse(n==1, 0, uncertainty[name=="radius"])),
+                L          = rnorm(1, value[name=="L"], 
+                ifelse(n==1, 0, uncertainty[name=="L"])),
+                Teff       = rnorm(1, value[name=="Teff"], 
+                ifelse(n==1, 0, uncertainty[name=="Teff"])),
+                Fe_H       = rnorm(1, value[name=="Fe/H"], 
+                ifelse(n==1, 0, uncertainty[name=="Fe/H"])),
+                nu_max     = rnorm(1, value[name=="nu_max"], 
+                ifelse(n==1, 0, uncertainty[name=="nu_max"]))
+            )
+            noisy_freqs$nu <- rnorm(nrow(freqs), freqs$nu, 
+                ifelse(n==1, 0, freqs$dnu))
+            seis.DF <- seismology(noisy_freqs, obs.DF$nu_max)
+            merge(rbind(obs.DF), rbind(seis.DF))
+        }, 1:n_perturbations)#simplify=FALSE)
+    }))
+}
+
+star_names <- c("16CygA", "16CygB", "Sun")
+stars <- list()
+for (star in star_names) {
+    fname <- file.path('perturb', paste0(star, "_perturb.dat"))
+    stars[[star]] <- if (file.exists(fname)) {
+        read.table(fname, header=TRUE)
+    } else {
+        perturbations <- monte_carlo_perturbations(
+            file.path("..", "data", paste0(star, "-obs.dat")),
+            file.path("..", "data", paste0(star, "-freqs.dat")))
+        write.table(perturbations, fname, quote=FALSE, 
+                    sep='\t', row.names=FALSE)
+    }
+}
+
+
+
+
+
+
 ### Obtain grid of models 
-fname <- 'grids/sobol_grid-no_diffusion-eddington-no_ccore-ratios.dat'
+fname <- 'sobol_grid-diffusion-eddington.dat'
 DF <- if (file.exists(fname)) {
     read.table(fname, header=TRUE)
 } else {
@@ -375,45 +444,3 @@ DF <- if (file.exists(fname)) {
 
 
 
-
-### Obtain properties of real stars varied within their uncertainties 
-monte_carlo_perturbations <- function(obs_data_file, freqs_data_file,
-        n_perturbations=10000) {
-    freqs <- read.table(freqs_data_file, header=TRUE)
-    obs_data <- read.table(obs_data_file, header=TRUE)
-    noisy_freqs <- freqs
-    do.call(rbind, with(obs_data, {replicate(n_perturbations, {
-        obs.DF <- data.frame(
-            radius     = rnorm(1, value[name=="radius"], 
-                            uncertainty[name=="radius"]),
-            L          = rnorm(1, value[name=="L"], 
-                            uncertainty[name=="L"]),
-            Teff       = rnorm(1, value[name=="Teff"], 
-                            uncertainty[name=="Teff"]),
-            log_g      = rnorm(1, value[name=="log_g"], 
-                            uncertainty[name=="log_g"]),
-            Fe_H       = rnorm(1, value[name=="Fe/H"], 
-                            uncertainty[name=="Fe/H"]),
-            nu_max     = rnorm(1, value[name=="nu_max"], 
-                            uncertainty[name=="nu_max"])
-        )
-        noisy_freqs$nu <- rnorm(nrow(freqs), freqs$nu, freqs$dnu)
-        seis.DF <- seismology(noisy_freqs, obs.DF$nu_max)
-        merge(rbind(obs.DF), rbind(seis.DF))
-    }, simplify=FALSE)}))
-}
-
-star_names <- c("16CygA", "16CygB", "Sun")
-stars <- list()
-for (star in star_names) {
-    fname <- file.path('perturb', paste0(star, "_perturb.dat"))
-    stars[[star]] <- if (file.exists(fname)) {
-        read.table(fname, header=TRUE)
-    } else {
-        perturbations <- monte_carlo_perturbations(
-            file.path("..", "data", paste0(star, "-obs.dat")),
-            file.path("..", "data", paste0(star, "-freqs.dat")))
-        write.table(perturbations, fname, quote=FALSE, 
-                    sep='\t', row.names=FALSE)
-    }
-}
