@@ -1,18 +1,20 @@
 #!/bin/bash
 
-dualexp() { 
+dualexp() {
     expname="M=$M""_""Y=$Y""_""Z=$Z""_""alpha=$alpha"
-    dirname="dexp/$expname"
+    dirname="deleter/$expname"
+    
     mkdir -p "$dirname"
-    cp -r dualexp_template/* "$dirname"
+    cp -r mesa_template/* "$dirname"
     cd "$dirname"
+    
     change 'initial_mass' '1.0' "$M"
     change 'initial_y' '-1' "$Y"
     change 'initial_z' '0.02' "$Z"
     change 'Zbase' '0.02' "$Z"
     change 'mixing_length_alpha' '2.1' "$alpha"
     
-    ./mk
+    mk
     run "ZAMS"
     mv LOGS/history.data .
     change "stop_near_zams" ".true." ".false."
@@ -22,18 +24,12 @@ dualexp() {
     rerun "Hexh"
     mv history.data LOGS
     
-    cd -
+    find "LOGS" -maxdepth 1 -type f -name "*.FGONG" | xargs -i \
+        --max-procs=64 bash -c "echo start {}; fgong2freqs.sh {}; echo end {}"
     
-    for fgong in $(find "$dirname/LOGS" -type f -name "*.FGONG"); do
-        getfreqs "$fgong" &
-        sleep 1
-    done
-}
-
-getfreqs() { # fgongfile
-    for i in 1 2; do 
-        ./fgong2freqs.sh "$1" && break || sleep 60
-    done
+    cd ..
+    Rscript ../seismology.R "$expname"
+    rm -rf "$expname"
 }
 
 change() { #param initval newval
@@ -42,14 +38,16 @@ change() { #param initval newval
 }
 
 run() { # nameOfRun
-    condor_submit mesa.job
-    condor_wait condor.log
+    #condor_submit mesa.job
+    #condor_wait condor.log
+    rn
     mv final_profile.data "LOGS/profile_$1.data"
     mv final_profile.data.FGONG "LOGS/profile_$1.data.FGONG"
 }
 
 rerun() { # nameOfRun
     run $1
+    cp history.data "history.$1.data"
     tail -n+7 LOGS/history.data >> history.data
 }
 
@@ -72,5 +70,3 @@ while [ "$#" -gt 0 ]; do
 done
 
 dualexp
-
-
