@@ -34,16 +34,24 @@ if [ -z ${2+x} ]; then
 fi
 
 ## Create a directory for the results and go there
-## Also convert the FGONG file to AMDL format and put it in the new directory
-mkdir "$path"
+mkdir -p "$path"
 cp "$1" "$path" 
 cd "$path"
-#fname=(${path//\/}) # remove slashes 
-fgong-amdl.d "$bname" "$fname.amdl"
-#cd "$path"
 
 logfile="fgong2freqs.log"
 exec > $logfile 2>&1
+
+## Convert the FGONG file to AMDL format
+#fgong-amdl.d "$bname" "$fname.amdl"
+#fgong-amdl.d "$bname" "$fname.amdl" &
+#sleep 60
+#kill -9 $!
+(echo "$bname"; echo "$fname.amdl"; echo 6.67232; echo 1) | \
+    $aprgdir/adiajobs/fgong-amdl.d.x
+#while timeout -k 10 9 fgong-amdl.d "$bname" "$fname.amdl"; [ $? = 124 ]; do
+#    echo "Warning: Conversion of $bname to .amdl format failed, retrying"
+#    sleep .$[ ( $RANDOM % 10 ) + 1 ]s  # Pause before retry
+#done
 
 ## Check that the amdl file was created 
 if [ ! -e "$fname.amdl" ]
@@ -55,30 +63,32 @@ fi
 ## Create a redistribute file and pass it to ADIPLS' redistrb 
 echo "
 2 '$fname.amdl'    @    
-3 '$fname-6202'    @
+3 '$fname.model'    @
 -1 ''        @
-nn,icnmsh
-6202,,,  @
+nn  ,icnmsh
+9600,     ,,  @
 icase,icvzbn,nsmth,ndisc,dlxdsc,dlgrmx,cacvzb
-21   ,      ,     ,200  ,      ,5.    ,      ,@  
+11   ,      ,     ,     ,      ,      ,      ,  @
 cg,  cx,ca  ,sig1,sig2,lmax,alphsf,adda4,accrm
-1.,0.05,0.05,0.  ,0.  ,   2,      ,0.02 ,0.01,  @
+  ,    ,    ,    ,    ,    ,      ,     ,     ,  @
 nout,cn,irsu,unew   
 60,,,,,,,,,  @
 nmodel,kmodel,itsaml,ioldex
 ,,,,,,,,,,,  @
 " > "redistrb-$fname.in"
-redistrb.c.d "redistrb-$fname.in"
+#redistrb.c.d "redistrb-$fname.in"
+(egrep '# *$|@ *$' "redistrb-$fname.in" | sed -e 's/ *[#,@] *$//') | \
+    $aprgdir/adiajobs/redistrb.c.d.x
 
 ## Check that the redistribution was successful
-if [ ! -e "$fname-6202" ]; then
+if [ ! -e "$fname.model" ]; then
     echo "Error: Redistribution of $fname failed"
     exit 1
 fi
 
 ## Create an adipls.in file with some decent (?) settings 
 echo "
- 2  '$fname-6202' @
+ 2  '$fname.model' @
  9  '$fname.log'  @
  11 '$fname.agsm' @
  4  '$fname.amde' @
@@ -99,69 +109,50 @@ osc:
   itrsig,sig1,istsig,inomde,itrds,
        1,   5,     1,     1,     , @
   dfsig,nsig,iscan,sig2,
-       ,  2,  5000, 10000, @
+       ,  2,  5000,9999, @
   eltrw1, eltrw2, sgtrw1, sgtrw2,
        0,     -1,      0,     -1,  @
 cst:
   cgrav
-  6.672320e-8 @
+  6.67408e-8  @
 int:
   iplneq,iturpr,icow,alb,
-       0,     0,   0,  1, @
+        ,      ,    ,   , @
   istsbc,fctsbc,ibotbc,fcttbc,
-       1,     0,     0,     0, @
+        ,      ,      ,      , @
   mdintg,iriche,xfit,fcnorm,eps,epssol,itmax,dsigre,
-       5,     1,0.99,      ,   ,      ,   15,     0, @
+        ,     1, 0.9,      ,   ,      ,   16,      , @
   fsig,dsigmx,irsevn,xmnevn,nftmax,itsord,
-  0.001,  0.1,     2,     0,     1,    20, @
+      ,      ,      ,      ,      ,      , @
 out:
   istdpr,nout,nprcen,irsord,iekinr,
-       9,  50,   100,    20,     0, @
+       9,    ,      ,    20,      , @
   iper,ivarf,kvarf,npvarf,nfmode,
-     1,    1,    2,     0,     3, @
+     1,    1,     ,      ,     0, @
   irotkr,nprtkr,igm1kr,npgmkr,ispcpr,
-       0,      ,     1,      ,     0, @
+       0,      ,     0,      ,     0, @
   icaswn, sigwn1, sigwn2, frqwn1, frqwn2,iorwn1, iorwn2, frlwn1, frlwn2
-        ,      0,     -1,      0,  10000,  -200,     50,      0,     -1, @
+        ,      0,     -1,      0,   9999,     0,     50,      0,     -1, @
 dgn:
   itssol,idgtss,moddet,iprdet,npout,
-       0,     0,     0,     0,     , @
+        ,      ,      ,      ,     , @
   imstsl,imissl,imjssl,idgnrk,
         ,      ,      ,      , @
 " > "adipls-$fname.in"
 
 ### Time to Run ADIPLS!
-## Check if the queuing system is available. Otherwise, run locally.
-if command -v condor_submit >/dev/null 2>&1
-  then
-    ## Create a shell script for executing adipls
-    echo "#!/usr/bin/sh
-adipls.c.d adipls-$fname.in
-" > "adipls-$fname.sh"
-    chmod +x "adipls-$fname.sh"
-    
-    ## Create and submit a condor job for executing that shell script
-	echo "Universe   = vanilla
-getenv     = True
-Executable = adipls-$fname.sh
-Output     = condor-$fname.out
-Error      = condor-$fname.error
-Log        = condor-$fname.log
-
-queue
-" > "condor-$fname.job"
-    condor_submit "condor-$fname.job"
-    condor_wait -status -wait 3600 "condor-$fname.log"
-  else
-    adipls.c.d "adipls-$fname.in"
-fi
+#adipls.c.d adipls-"$fname".in
+(egrep '# *$|@ *$' adipls-"$fname".in | sed -e 's/ *[#,@] *$//') | \
+    $aprgdir/adipls/adipls.c.d.x
 
 ## Check that the .agsm file was created successfully, and convert it to freqs 
 if [ ! -e "$fname.agsm" ]; then
     echo "Error: Failed to generate $fname.agsm"
     exit 1
 fi
-set-obs.d 6 "$fname.agsm" "$fname.dat" 3
+#set-obs.d 16 "$fname.agsm" "$fname.dat"
+(echo 16; echo "$fname.agsm"; echo "$fname.dat"; echo "2") | \
+	$aprgdir/adiajobs/set-obs.d.x
 
 ## Check that the frequencies were created, and remove the annoying text 
 if [ ! -e "$fname.dat" ]; then
@@ -169,11 +160,12 @@ if [ ! -e "$fname.dat" ]; then
     exit 1
 fi
 cp "$fname.dat" "$fname.dat.bak"
-cat "$fname.dat.bak" | tr -s ' ' | cut -d ' ' -f 2-4 > "$fname.dat"
-#sed -i.bak 's/  [a-zA-Z].*$//g' "$fname.dat"
+#cat "$fname.dat.bak" | tr -s ' ' | cut -d ' ' -f 2-5 >| "$fname.dat"
+cat "$fname.dat.bak" | cut -b 1-36 | \
+    awk -v FIELDWIDTHS="5 7 10 13" -v OFS=, '{print $1,$2,$3,$4}' | \
+    sed "s\,\ \g" | tr -s ' ' >| "$fname.dat"
 
 ### Hooray!
 cp "$fname.dat" ..
 echo "Conversion complete. Results can be found in $path/$fname.dat"
 exit 0
-
