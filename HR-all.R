@@ -3,6 +3,7 @@ library(RColorBrewer)
 library(akima)
 library(parallel)
 library(parallelMap)
+library(data.table)
 
 font <- 'Palatino'
 
@@ -15,7 +16,7 @@ simulations <- simulations[grep('.dat', simulations)]
 
 parallelStartMulticore(max(1, detectCores()))
 seis.DF <- do.call(rbind, 
-    parallelMap(function (f) read.table(f, header=1), simulations))
+    Map(function (f) read.table(f, header=1), simulations))
 
 print("Before outlier removal:")
 print(nrow(seis.DF))
@@ -29,10 +30,6 @@ get_outliers <- function(DF) {
 outliers <- get_outliers(seis.DF)
 while (length(outliers) > 0) {
     seis.DF <- seis.DF[!(1:nrow(seis.DF)) %in% outliers,]
-    #combos <- unique(seis.DF[,1:4])
-    #tracks <- parallelMap(function(i) 
-    #    nrow(merge(combos[i,], seis.DF)), 1:nrow(combos))
-    
     singletons <- c()
     for (ii in which(!duplicated(seis.DF[,1:4])))
         if (!(ii+1 < nrow(seis.DF) && all(seis.DF[ii,1:4] == seis.DF[ii+1,1:4])
@@ -42,13 +39,6 @@ while (length(outliers) > 0) {
         print(paste("Removing", length(singletons), "singletons"))
         seis.DF <- seis.DF[-singletons,]
     }
-    
-    #seis.DF <- seis.DF[parallelMap(function(i) 
-    #    length(merge(seis.DF[i,1:5], seis.DF))>1, 1:nrow(seis.DF)),]
-    #seis.DF <- seis.DF[unlist(parallelMap(function(i) 
-    #    i+1 < nrow(seis.DF) && all(seis.DF[i,1:4] == seis.DF[i+1,1:4]) | 
-    #    i-1 > 0 && all(seis.DF[i,1:4] == seis.DF[i-1,1:4]), 1:nrow(seis.DF))),]
-    #seis.DF <- seis.DF[duplicated(seis.DF[,1:4]),]
     outliers <- get_outliers(seis.DF)
 }
 
@@ -62,7 +52,7 @@ combos <- unique(seis.DF[,1:4])
 #ages <- sapply(1:nrow(combos), function(i) max(merge(combos[i,], seis.DF)$age))
 ages <- parallelMap(function(i) max(merge(combos[i,], seis.DF)$age), 
     1:nrow(combos))
-combos <- combos[order(ages),]
+combos <- combos[order(unlist(ages)),]
 
 
 png(file.path(plot_dir, 'HR.png'), width=600, height=450, family=font)
