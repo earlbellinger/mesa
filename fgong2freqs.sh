@@ -42,16 +42,8 @@ logfile="fgong2freqs.log"
 exec > $logfile 2>&1
 
 ## Convert the FGONG file to AMDL format
-#fgong-amdl.d "$bname" "$fname.amdl"
-#fgong-amdl.d "$bname" "$fname.amdl" &
-#sleep 60
-#kill -9 $!
-(echo "$bname"; echo "$fname.amdl"; echo 6.67232; echo 1) | \
+(echo "$bname"; echo "$fname.amdl"; echo 6.67408; echo 1) | \
     $aprgdir/adiajobs/fgong-amdl.d.x
-#while timeout -k 10 9 fgong-amdl.d "$bname" "$fname.amdl"; [ $? = 124 ]; do
-#    echo "Warning: Conversion of $bname to .amdl format failed, retrying"
-#    sleep .$[ ( $RANDOM % 10 ) + 1 ]s  # Pause before retry
-#done
 
 ## Check that the amdl file was created 
 if [ ! -e "$fname.amdl" ]
@@ -76,7 +68,6 @@ nout,cn,irsu,unew
 nmodel,kmodel,itsaml,ioldex
 ,,,,,,,,,,,  @
 " > "redistrb-$fname.in"
-#redistrb.c.d "redistrb-$fname.in"
 (egrep '# *$|@ *$' "redistrb-$fname.in" | sed -e 's/ *[#,@] *$//') | \
     $aprgdir/adiajobs/redistrb.c.d.x
 
@@ -141,7 +132,6 @@ dgn:
 " > "adipls-$fname.in"
 
 ### Time to Run ADIPLS!
-#adipls.c.d adipls-"$fname".in
 (egrep '# *$|@ *$' adipls-"$fname".in | sed -e 's/ *[#,@] *$//') | \
     $aprgdir/adipls/adipls.c.d.x
 
@@ -150,17 +140,15 @@ if [ ! -e "$fname.agsm" ]; then
     echo "Error: Failed to generate $fname.agsm"
     exit 1
 fi
-#set-obs.d 16 "$fname.agsm" "$fname.dat"
 (echo 16; echo "$fname.agsm"; echo "$fname.dat"; echo "2") | \
 	$aprgdir/adiajobs/set-obs.d.x
 
-## Check that the frequencies were created, and remove the annoying text 
+## Check that the frequencies were created, and remove the extra text 
 if [ ! -e "$fname.dat" ]; then
     echo "Error: Failed to generate frequency information $fname.dat"
     exit 1
 fi
 cp "$fname.dat" "$fname.dat.bak"
-#cat "$fname.dat.bak" | tr -s ' ' | cut -d ' ' -f 2-5 >| "$fname.dat"
 cat "$fname.dat.bak" | cut -b 1-36 | \
     awk -v FIELDWIDTHS="5 7 10 13" -v OFS=, '{print $1,$2,$3,$4}' | \
     sed "s\,\ \g" | tr -s ' ' >| "$fname.dat"
