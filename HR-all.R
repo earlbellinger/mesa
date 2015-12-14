@@ -5,6 +5,7 @@ library(parallel)
 library(parallelMap)
 library(data.table)
 library(lattice)
+library(lpSolve)
 
 font <- 'Palatino'
 
@@ -21,8 +22,22 @@ plot_width = 6.97522
 plot_height = 4.17309
 
 # Load data
-seis.DF <- data.table(do.call(rbind, 
-    Map(function (f) read.table(f, header=1), simulations)))
+load_data <- function(f) {
+    DF <- read.table(f, header=1)
+    n <- 100
+    if (nrow(DF) < n) return(NULL)
+    N <- length(DF$Hc)
+    ideal <- seq(max(DF$Hc), min(DF$Hc), length=n)
+    cost.mat  <- outer(ideal, DF$Hc, function(x, y) abs(x-y))
+    row.signs <- rep("==", n)
+    row.rhs   <- rep(1, n)
+    col.signs <- rep("<=", N)
+    col.rhs   <- rep(1, N)
+    sol <- lp.transport(cost.mat, "min", row.signs, row.rhs,
+        col.signs, col.rhs)$solution
+    DF[apply(sol, 1, which.max),]
+}
+seis.DF <- data.table(do.call(rbind, Map(load_data, simulations)))
 setkey(seis.DF, M, Y, Z, alpha)
 keys <- key(seis.DF)
 
@@ -32,27 +47,22 @@ print(nrow(seis.DF))
 print(sapply(seis.DF, fivenum))
 
 parallelStartMulticore(max(1, detectCores()))
-get_outliers <- function(DF) {
-    unique(unlist(parallelMap(
-        function(ii) which(DF[[ii]] %in% boxplot.stats(DF[[ii]], coef=10)$out),
-        names(DF))))
-}
 repeat {
-    outliers <- get_outliers(seis.DF)
+    outliers <- unique(unlist(parallelMap(
+        function(ii) which(
+            seis.DF[[ii]] %in% boxplot.stats(seis.DF[[ii]], coef=100)$out),
+        names(seis.DF))))
     if (length(outliers) <= 0) break
     print(paste("Removing", length(outliers), "models"))
     seis.DF <- seis.DF[-outliers,]
     
-    singletons <- c()
-    for (ii in which(!duplicated(seis.DF[, keys, with=0])))
-        if (!(ii+1 < nrow(seis.DF) && 
-              all(seis.DF[ii, keys, with=0]==seis.DF[ii+1, keys, with=0])
-            | ii-1 > 0 && 
-              all(seis.DF[ii, keys, with=0]==seis.DF[ii-1, keys, with=0])))
-                singletons <- c(singletons, ii)
-    if (!is.null(singletons)) {
-        print(paste("Removing", length(singletons), "singletons"))
-        seis.DF <- seis.DF[-singletons,]
+    combos <- unique(seis.DF[,keys, with=0])
+    remove_list <- unlist(parallelMap(function(i) nrow(merge(seis.DF, combos[i,])), 
+        1:nrow(combos))) < 20
+    
+    if (sum(remove_list) > 0) {
+        print(paste("Removing", sum(remove_list), "singletons"))
+        seis.DF <- seis.DF[!combos[remove_list]]
     }
 }
 
@@ -67,102 +77,184 @@ write.table(seis.DF, file.path('grids', 'deleter.dat'), quote=FALSE,
 solar_vals <- read.table(file.path('perturb', 'Sun_perturb.dat'), 
     nrow=1, header=1)
 
+# Plot histograms
+d <- melt(seis.DF[,1:8, with=0])
+ggplot(d,aes(x = value)) +
+    geom_histogram() + 
+    facet_wrap(~variable,scales = "free_x", nrow=2)
+
 # Sort data
 combos <- unique(seis.DF[,keys, with=0])
-ages <- parallelMap(function(i) max(merge(seis.DF, combos[i,])$age), 
-    1:nrow(combos))
-combos <- combos[order(unlist(ages)),]
+ages <- unlist(parallelMap(function(i) max(merge(seis.DF, combos[i,])$age), 
+    1:nrow(combos)))
+combos <- combos[order(ages),]
+
+col.pal <- colorRampPalette(brewer.pal(11, "Spectral"))(1000)
+
+thirds <- c('age', 'M', 'Y', 'Z', 'alpha', 'He', 'Hc')
+labels <- c(
+    'Age [Gyr]', 
+    expression(M/M["\u0298"]), 
+    expression(Y[0]), 
+    expression(Z[0]),
+    expression(alpha["MLT"]), 
+    expression(X(He)), 
+    expression(H[c])
+)
+levels <- list(
+    age=0:14, 
+    M=seq(0.7, 1.3, 0.1),
+    Y=seq(0.22, 0.34, 0.01),
+    Z=log10(seq(10**1e-04, 10**0.04, length=10)),
+    alpha=seq(1.5, 2.5, 0.1),
+    He=seq(0.22, 0.45, 0.02),
+    Hc=seq(0, 0.78, 0.05)
+)
+color_levels <- list(
+    age=seq(0, 13.8, 0.25),
+    M=seq(0.7, 1.3, 0.025),
+    Y=seq(0.22, 0.34, 0.0025),
+    Z=log10(seq(10**1e-04, 10**0.04, length=20)),
+    alpha=seq(1.5, 2.5, 0.025),
+    He=seq(0.22, 0.45, 0.005),
+    Hc=seq(0, 0.78, 0.015)
+)
+
 
 # Make inputs diagram
-cairo_pdf(file.path(plot_dir, 'inputs.pdf'), 
-          width=plot_width, height=plot_width,#height=plot_height*2, 
-          family=font)
-par(mar=c(0, 0, 0, 0), mgp=c(2, 0.25, 0), oma=c(0, 0, 0, 0))
-splom(combos, pch=20, cex=0.05, 
+#cairo_pdf(file.path(plot_dir, 'inputs.pdf'), 
+#          width=plot_width+0.25*plot_width, height=plot_width, 
+#          family=font)
+png(file.path(plot_dir, 'inputs.png'), res=400, 
+    width=150*plot_width, height=150*plot_width, 
+    family=font)
+par(mar=c(0, 0, 0, 0), mgp=c(0, 0, 0), oma=c(0, 0, 0, 0))
+H <- 1-combos$Y-combos$Z
+varmax <- max(H)
+varmin <- min(H)
+cols <- col.pal[floor((H-varmin) / (varmax-varmin) * (length(col.pal)-1))+1]
+splom(combos, cex=0.001, pch=3,
+      col=cols,
+      #col.pal[floor(ages/max(ages)*length(col.pal))],
       xlab=NULL, ylab=NULL, 
-      axis.text.cex=1,
-      axis.text.lineheight=0.1,
-      axis.line.tck=1,
-      varname.cex=2,
+      axis.text.cex=0.25,
+      axis.text.lineheight=0.0001,
+      axis.line.tck=0.25,
+      xaxs='n', yaxs='n',
+      varname.cex=0.5,
       varnames=c(expression(M[0]), expression(Y[0]), expression(Z[0]), 
                expression(alpha["MLT"])))
-#pairs(combos, upper.panel=NULL, 
-#      pch=20, cex=0.25, tcl=-0.25, gap=1.5,
-#      cex.labels=2, font.labels=2,
-#      labels=c(expression(M[0]), expression(Y[0]), expression(Z[0]), 
-#               expression(alpha["MLT"])))
 dev.off()
 
-# HR Diagram
-png(file.path(plot_dir, 'HR.png'), family=font, res=400,
-    width=plot_width*250, height=plot_height*250)
-par(mar=c(3, 4, 1, 1), mgp=c(2, 0.25, 0), cex.lab=1.3)
+png(file.path(plot_dir, 'inputs-legend.png'), res=400, 
+    width=150*plot_width/8, height=150*plot_width, 
+    family=font)
+par(mar=c(0, 0, 0, 0), mgp=c(0, 0, 0), oma=c(0, 0, 0, 0))
+color.legend(par()$usr[2], par()$usr[1], par()$usr[4], par()$usr[3], 
+             signif(quantile(seq(varmin, varmax, length=1000), 
+                    c(0.05, 0.275, 0.5, 0.725, 0.95)), 3), 
+             col.pal[1:length(col.pal)], gradient='y', align='rb')
+mtext(expression(H_0), 4, line=4.5, cex=1.3)
+dev.off()
+
+
+# HR scatter
+third <- 'M'
+varmax <- round(max(seis.DF[[third]]), 2)
+varmin <- round(min(seis.DF[[third]]), 2)
+png(file.path(plot_dir, 'HR-M-linear.png'), 
+    family=font, res=400, width=plot_width*250, height=plot_height*250)
+par(mar=c(3, 4, 1, 6), mgp=c(2, 0.25, 0), cex.lab=1.3)
 for (simulation_i in 1:nrow(combos)) {
     DF <- merge(seis.DF, combos[simulation_i,])
-    HR <- log10(DF$L) ~ log10(DF$Teff)
-    hrcex <- 0.1*DF$M/max(seis.DF$M)
-    hrcol <- brewer.pal(10,"Spectral")[floor(DF$age/13.9*10)+1]
+    relation <- log10(DF$L) ~ DF$Teff
+    color <- col.pal[
+        floor((DF[[third]]-varmin)/(varmax-varmin)*length(col.pal))+1]
+    cex <- 0.01
     if (simulation_i == 1) {
-        plot(HR, #type='l', 
-            tcl=0, pch=20, cex=hrcex, col=hrcol, #lwd=0.1,
-            ylim=range(log10(seis.DF$L), 0, 1), 
-            xlim=rev(log10(range(seis.DF$Teff))),
-            xlab=expression(T[eff]), xaxt='n', yaxt='n',
+        plot(relation, 
+            pch=1, axes=FALSE,
+            col=color, cex=cex, tcl=0,
+            ylim=range(log10(seis.DF$L)),#, 0, 1),
+            xlim=rev(range(seis.DF$Teff)), 
+            xlab=expression(T["eff"]~"["*K*"]"), 
             ylab=expression(L / L['\u0298']))
-        abline(v=log10(5777), lty=3, col='black')
-        abline(h=log10(1), lty=3, col='black')
+        abline(v=5777, lty=3, col='black')
+        abline(h=0, lty=3, col='black')
         magaxis(side=1:4, family=font, tcl=0.25, labels=c(1,1,0,0),
-                unlog='xy', mgp=c(2, 0.25, 0), prettybase=100)
+                majorn=c(4, 3, 4, 3),
+                unlog='y', mgp=c(2, 0.25, 0))
     } else {
-        points(HR, pch=20, col=hrcol, cex=hrcex)
-        #lines(HR)
+        points(relation, col=color, pch=20, cex=cex)
     }
 }
-points(log10(5777), log10(1), pch=1, cex=1)
-points(log10(5777), log10(1), pch=20, cex=0.1)
+points(5777, 0, pch=1, cex=1)
+points(5777, 0, pch=20, cex=0.1)
+var1range <- diff(par()$usr)[1]
+color.legend(par()$usr[2]+0.05*var1range, par()$usr[3], 
+             par()$usr[2]+0.10*var1range, par()$usr[4], 
+    signif(quantile(seq(varmin, varmax, length=1000), 
+        c(0.05, 0.275, 0.5, 0.725, 0.95)), 3), 
+    col.pal[1:length(col.pal)], gradient='y', align='rb')
+mtext(expression(M/M['\u0298']), 4, line=4.5, cex=1.3)
 dev.off()
 
 
-scatter_mesh <- function(plotname, var1, var2, var3, 
-        label1, label2, label3) {
-    #my.matrix <- interp(seis.DF[[var1]], seis.DF[[var2]], seis.DF[[var3]])
-    cairo_pdf(file.path(hrcdr_dir, paste0('mesh-', plotname, '-', var3, '.pdf')), 
-        width=plot_width, height=plot_height, family=font)
-    par(mar=c(5, 6, 1, 0), mgp=c(2, 0.25, 0), cex.lab=1)
-    filled.contour(my.matrix,
-        levels=sort(unique(round(seis.DF[[third]], 1)))[c(TRUE, FALSE, FALSE)], 
-        color=colorRampPalette(brewer.pal(10, "Spectral")),
-        key.axes={
-            axis(4, cex.axis=1.5, tcl=0, line=0)
-            mtext(label3, side=4, las=3, line=4, cex=2)
-        },
-        plot.axes={
-            contour(my.matrix, add=TRUE, labcex=0.5, levels=levels[[third]])
-            points(solar_vals[[var1]], solar_vals[[var2]], pch=1, cex=1)
-            points(solar_vals[[var1]], solar_vals[[var2]], pch=20, cex=0.1)
-            magaxis(side=1:4, family=font, tcl=0.25, labels=c(1,1,0,0),
-                    mgp=c(2, 0.5, 0), cex.axis=1.5)
-        },
-        plot.title={
-            title(xlab=label1, cex.lab=2, line=3)
-            title(ylab=label2, cex.lab=2, line=3)
-        })
-    dev.off()
-    
-    
+
+
+# HR mesh
+mesh <- interp(seis.DF$Teff, log10(seis.DF$L), seis.DF$M,
+    xo=seq(min(seis.DF$Teff), max(seis.DF$Teff), length=100),
+    yo=seq(log10(min(seis.DF$L)), log10(max(seis.DF$L)), length=100))
+cairo_pdf(file.path(plot_dir, 'mesh-HR-M-linear.pdf'), 
+    width=plot_width, height=plot_height, family=font)
+par(mar=c(5, 6, 1, 0), mgp=c(2, 0.25, 0), cex.lab=1)
+filled.contour(mesh,
+    ylim=range(log10(seis.DF$L)),
+    xlim=rev(range(seis.DF$Teff)), 
+    xaxs='r', yaxs='r',
+    levels=color_levels[['M']], 
+    color=colorRampPalette(brewer.pal(11, "Spectral")),
+    key.axes={
+        axis(4, cex.axis=1.5, tcl=0, line=0)
+        mtext(expression(M/M['\u0298']), side=4, las=3, line=4, cex=2)
+    },
+    plot.axes={
+        contour(mesh, add=TRUE, labcex=1, levels=levels[['M']],
+           method="simple")
+        points(5777, 0, pch=1, cex=1)
+        points(5777, 0, pch=20, cex=0.1)
+        abline(v=5777, lty=3, col=adjustcolor('black', alpha.f=0.25))
+        abline(h=0, lty=3, col=adjustcolor('black', alpha.f=0.25))
+        magaxis(side=1:4, family=font, tcl=0.25, labels=c(1,1,0,0),
+                majorn=c(4, 3, 4, 3), cex.axis=1.5,
+                unlog='y')#, mgp=c(2, 0.25, 0))
+    },
+    plot.title={
+        title(xlab=expression(T["eff"]~"["*K*"]"), cex.lab=2, line=3)
+        title(ylab=expression(L / L['\u0298']), cex.lab=2, line=3)
+    })
+dev.off()
+
+
+
+
+## Color by age, mass, Y0, X(He), metallicity, mix length, and core hydrogen
+scatter_mesh <- function(plotname, var1, var2, var3, label1, label2, label3) { 
+    # scatter 
     varmax <- max(seis.DF[[third]])
     varmin <- min(seis.DF[[third]])
     png(file.path(hrcdr_dir, paste0(plotname, '-', var3, '.png')), 
         family=font, res=400, width=plot_width*250, height=plot_height*250)
-    par(mar=c(3, 4, 1, 1), mgp=c(2, 0.25, 0), cex.lab=1.3)
+    par(mar=c(3, 4, 1, 6), mgp=c(2, 0.25, 0), cex.lab=1.3)
     for (simulation_i in 1:nrow(combos)) {
         DF <- merge(seis.DF, combos[simulation_i,])
         relation <- DF[[var2]] ~ DF[[var1]]
-        color <- col.pal[floor((DF[[third]]-varmin)/(varmax-varmin)*9)+1]
+        color <- col.pal[floor((DF[[third]]-varmin)/(varmax-varmin)*length(col.pal))+1]
         cex <- 0.01
         if (simulation_i == 1) {
             plot(relation, 
-                pch=20, xaxt='n', yaxt='n',
+                pch=20, axes=FALSE,
                 col=color, cex=cex, tcl=0,
                 ylim=range(seis.DF[[var2]]), 
                 xlim=range(seis.DF[[var1]]),
@@ -177,27 +269,58 @@ scatter_mesh <- function(plotname, var1, var2, var3,
     }
     points(solar_vals[[var1]], solar_vals[[var2]], pch=1, cex=1)
     points(solar_vals[[var1]], solar_vals[[var2]], pch=20, cex=0.1)
+    var1max <- max(seis.DF[[var1]])
+    var1range <- diff(par()$usr)[1]
+    color.legend(par()$usr[2]+0.05*var1range, par()$usr[3], 
+                 par()$usr[2]+0.10*var1range, par()$usr[4], 
+        signif(quantile(seq(varmin, varmax, length=1000), 
+            c(0.05, 0.275, 0.5, 0.725, 0.95)), 2), 
+        col.pal[1:length(col.pal)], gradient='y', align='rb')
+    mtext(label3, 4, line=4.5, cex=1.3)
+    dev.off()
+    
+       
+    # mesh
+    mesh <- interp(seis.DF[[var1]], seis.DF[[var2]], seis.DF[[var3]])
+    cairo_pdf(file.path(hrcdr_dir, 
+            paste0('mesh-', plotname, '-', var3, '.pdf')), 
+        width=plot_width, height=plot_height, family=font)
+    par(mar=c(5, 6, 1, 0), mgp=c(2, 0.25, 0), cex.lab=1)
+    filled.contour(mesh,
+        levels=color_levels[[third]], 
+        color=colorRampPalette(brewer.pal(11, "Spectral")),
+        key.axes={
+            axis(4, cex.axis=1.5, tcl=0, line=0)
+            mtext(label3, side=4, las=3, line=4, cex=2)
+        },
+        plot.axes={
+            contour(mesh, add=TRUE, labcex=0.5, levels=levels[[third]])
+            points(solar_vals[[var1]], solar_vals[[var2]], pch=1, cex=1)
+            points(solar_vals[[var1]], solar_vals[[var2]], pch=20, cex=0.1)
+            magaxis(side=1:4, family=font, tcl=0.25, labels=c(1,1,0,0),
+                    mgp=c(2, 0.5, 0), cex.axis=1.5)
+        },
+        plot.title={
+            title(xlab=label1, cex.lab=2, line=3)
+            title(ylab=label2, cex.lab=2, line=3)
+        })
     dev.off()
 }
 
+for (third in thirds) {
+    scatter_mesh('JCD', 'Dnu_median', 'dnu02_median', third, 
+        expression(Delta*nu~"["*mu*Hz*"]"), 
+        expression(delta*nu[0*","*2]~"["*mu*Hz*"]"), 
+        labels[which(third==thirds)])
+    
+    #scatter_mesh('HR', 'Teff', 'L', third, 
+    #    expression(T[eff]~"["*K*"]"), 
+    #    expression(L/L['\u0298']), 
+    #    labels[which(third==thirds)])
+}
 
 
-## Color by age, mass, helium, metallicity, mix length, and core hydrogen
-col.pal <- brewer.pal(10, "Spectral")
-thirds <- c('age', 'M', 'Y', 'Z', 'alpha')
-labels <- c('Age [Gyr]', expression(M[0]), expression(Y[0]), expression(Z[0]), 
-            expression(alpha["MLT"]))
-levels <- list(age=0:14)
-
-
-
-scatter_mesh('JCD', 'Dnu_median', 'dnu02_median', 'age', 
-    expression(Delta*nu~"["*mu*Hz*"]"),
-    expression(delta*nu[0*","*2]~"["*mu*Hz*"]"),
-    labels[which(third==thirds)])
-
-
-
+if (FALSE) {
 
 for (third in thirds) {
     var1 <- 'Dnu_median'
@@ -648,5 +771,7 @@ predict(lm(age ~ poly(r_sep02_median,6)*poly(r_avg01_median,6), data=seis.DF),
         interval="predict", level=0.68)
 #corrs <- do.call(cbind, Map(function (f) { 
 #    a <- read.table(f, header=1); cor(a, a$age) } , simulations))
+
+}
 
 }
